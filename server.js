@@ -9,6 +9,7 @@ const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
 const AWS = require('aws-sdk');
+const { spawn } = require('child_process');
 
 // Initialize the app and database connection
 const app = express();
@@ -77,6 +78,7 @@ const dbSetup = async () => {
             user_id INT REFERENCES users(id),
             image_url VARCHAR(255) NOT NULL,
             category VARCHAR(50),
+            description TEXT,
             tags TEXT
         );`,
     ];
@@ -168,15 +170,43 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         // Upload file to S3
         const uploadResult = await s3.upload(params).promise();
 
-        // Delete the file from the local file system after uploading to S3
-        fs.unlinkSync(req.file.path);
+        const pythonScript = spawn('python', ['./scripts/imagetopromt.py', req.file.path]);
+
+        let description = '';
+        
+        pythonScript.stdout.on('data', (data) => {
+            console.log(`Python script stdout: ${data.toString()}`);
+            description += data.toString();
+        });
+
+        pythonScript.stderr.on('data', (data) => {
+            console.error(`Python script stderr: ${data.toString()}`);
+        });
+
+        await new Promise((resolve, reject) => {
+            pythonScript.on('close', (code) => {
+                console.log(`Python script exited with code ${code}`);
+                if (code !== 0) {
+                    return reject(new Error(`Python script exited with code ${code}`));
+                }
+                resolve(cleanupFile(req.file.path));
+            });
+
+            pythonScript.on('error', (error) => {
+                console.error(`Error spawning Python script: ${error.message}`);
+                reject(error);
+            });
+        });
+
+        // // Delete the file from the local file system after uploading to S3
+        // fs.unlinkSync(req.file.path);
 
         // Save metadata in the database
         const imageUrl = "https://d26666n82ym1ga.cloudfront.net/"+fileKey; // S3 file URL
         
         const result = await pool.query(
-            'INSERT INTO outfits (user_id, image_url, category, tags) VALUES ($1, $2, $3, $4) RETURNING id',
-            [userId, imageUrl, category, tags]
+            'INSERT INTO outfits (user_id, image_url, category, tags,description) VALUES ($1, $2, $3, $4,$5) RETURNING id',
+            [userId, imageUrl, category, tags, description]
         );
 
         res.status(201).json({
@@ -188,12 +218,8 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         // Handle errors
         console.error('Error uploading file:', err.message);
         res.status(500).json({ error: 'Failed to upload file', details: err.message });
+        cleanupFile(req.file.path);
     }
-    finally {
-      // Clean up the temporary file
-      cleanupFile(req.file.path);
-      
-  }
 });
 
 // Wardrobe Organizer
@@ -222,6 +248,27 @@ app.get('/wardrobe', async (req, res) => {
     }
 });
 
+app.get('/outfits/:id', async (req, res) => {
+    const { id } = req.params;
+    const userId = req.userId; // Extracted from middleware after authentication
+
+    try {
+        const result = await pool.query(
+            'SELECT * FROM outfits WHERE id = $1 AND user_id = $2',
+            [id, userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Outfit not found or unauthorized' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch outfit', details: err.message });
+    }
+});
+
+
 // Edit Outfit
 app.put('/outfits/:id', async (req, res) => {
     const { id } = req.params;
@@ -238,6 +285,42 @@ app.put('/outfits/:id', async (req, res) => {
         res.json({ message: 'Outfit updated successfully', outfitId: result.rows[0].id });
     } catch (err) {
         res.status(500).json({ error: 'Failed to update outfit', details: err.message });
+    }
+});
+
+app.delete('/outfits/:id', async (req, res) => {
+    const { id } = req.params;
+    const userId = req.userId; // Extracted from middleware after authentication
+
+    try {
+        // Retrieve the outfit details
+        const outfitResult = await pool.query(
+            'SELECT image_url FROM outfits WHERE id = $1 AND user_id = $2',
+            [id, userId]
+        );
+
+        if (outfitResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Outfit not found or unauthorized' });
+        }
+
+        const imageUrl = outfitResult.rows[0].image_url;
+
+        // Extract the file key from the image URL
+        const fileKey = imageUrl.replace('https://d26666n82ym1ga.cloudfront.net/', '');
+
+        // Delete the file from S3
+        await s3.deleteObject({
+            Bucket: 'wardrobess',
+            Key: fileKey,
+        }).promise();
+
+        // Delete the outfit record from the database
+        await pool.query('DELETE FROM outfits WHERE id = $1 AND user_id = $2', [id, userId]);
+
+        res.json({ message: 'Outfit deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting outfit:', err.message);
+        res.status(500).json({ error: 'Failed to delete outfit', details: err.message });
     }
 });
 
