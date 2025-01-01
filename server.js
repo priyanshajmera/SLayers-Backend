@@ -216,6 +216,36 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     }
 });
 
+app.get('/wardrobe-details', async (req, res) => {
+    const userId = req.userId; // Extracted from middleware after authentication
+  
+    try {
+      // Query to fetch wardrobe details for the given user_id
+      const query = 'SELECT id, image_url, description FROM outfits WHERE user_id = $1';
+      const values = [userId];
+  
+      const result = await pool.query(query, values);
+  
+      // Build the prompt using the fetched data
+      if (result.rows.length > 0) {
+        let prompt = 'These are my clothes in my wardrobe:\n\n';
+        result.rows.forEach((row, index) => {
+          prompt += `${index + 1}. Cloth ${index + 1}\n`;
+          
+          prompt += `   Image URL: ${row.image_url}\n`;
+          prompt += `   Description: ${row.description}\n\n`;
+        });
+        res.json({ prompt });
+        
+      } else {
+        res.status(404).json({ error: 'No wardrobe details found for the given user.' });
+      }
+    } catch (err) {
+      console.error('Error fetching wardrobe details:', err);
+      res.status(500).json({ error: 'Failed to fetch wardrobe details', details: err.message });
+    }
+});
+
 // Wardrobe Organizer
 app.get('/wardrobe', async (req, res) => {
     const userId = req.userId; // Extracted from middleware after authentication
