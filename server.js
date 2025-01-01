@@ -9,7 +9,10 @@ const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
 const AWS = require('aws-sdk');
+const axios = require('axios');
 const { spawn } = require('child_process');
+
+require('dotenv').config();
 
 // Initialize the app and database connection
 const app = express();
@@ -50,19 +53,20 @@ const cleanupFile = (filePath) => {
 
 // AWS S3 Setup
 const s3 = new AWS.S3({
-    accessKeyId: 'Accesskey',
-    secretAccessKey: 'SecretKey'
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     
 });
 
 // PostgreSQL connection pool
 const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'slayrs',
-    password: '1234',
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASS,
     port: 5432,
 });
+
 
 // Create tables
 const dbSetup = async () => {
@@ -170,33 +174,16 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         // Upload file to S3
         const uploadResult = await s3.upload(params).promise();
 
-        const pythonScript = spawn('python', ['./scripts/imagetopromt.py', req.file.path]);
+        // Call Flask API to process the image
+        const flaskResponse = await axios.post(`${process.env.api_url}/process-image`, {
+            image_url: `https://d26666n82ym1ga.cloudfront.net/${fileKey}`,
+        });
 
-        let description = '';
+        const description = flaskResponse.data.caption;
+
+        cleanupFile(req.file.path);
+
         
-        pythonScript.stdout.on('data', (data) => {
-            console.log(`Python script stdout: ${data.toString()}`);
-            description += data.toString();
-        });
-
-        pythonScript.stderr.on('data', (data) => {
-            console.error(`Python script stderr: ${data.toString()}`);
-        });
-
-        await new Promise((resolve, reject) => {
-            pythonScript.on('close', (code) => {
-                console.log(`Python script exited with code ${code}`);
-                if (code !== 0) {
-                    return reject(new Error(`Python script exited with code ${code}`));
-                }
-                resolve(cleanupFile(req.file.path));
-            });
-
-            pythonScript.on('error', (error) => {
-                console.error(`Error spawning Python script: ${error.message}`);
-                reject(error);
-            });
-        });
 
         // // Delete the file from the local file system after uploading to S3
         // fs.unlinkSync(req.file.path);
