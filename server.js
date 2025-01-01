@@ -175,11 +175,18 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         const uploadResult = await s3.upload(params).promise();
 
         // Call Flask API to process the image
-        const flaskResponse = await axios.post(`${process.env.api_url}/process-image`, {
-            image_url: `https://d26666n82ym1ga.cloudfront.net/${fileKey}`,
-        });
-
-        const description = flaskResponse.data.caption;
+        try{
+            const flaskResponse = await axios.post(`${process.env.API_URL}/process-image`, {
+                image_url: `https://d26666n82ym1ga.cloudfront.net/${fileKey}`,
+            });
+    
+            const description = flaskResponse.data.caption;
+        }
+        catch (flaskError) {
+            console.error('Flask API failed:', flaskError.message);
+            description = 'Description unavailable'; // Default value in case of failure
+        }
+        
 
         cleanupFile(req.file.path);
 
