@@ -49,21 +49,21 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 const cleanupFile = (filePath) => {
-  try {
-      if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-          console.log(`Temporary file deleted: ${filePath}`);
-      }
-  } catch (err) {
-      console.error(`Error deleting file: ${filePath}`, err.message);
-  }
+    try {
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`Temporary file deleted: ${filePath}`);
+        }
+    } catch (err) {
+        console.error(`Error deleting file: ${filePath}`, err.message);
+    }
 };
 
 // AWS S3 Setup
 const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    
+
 });
 
 // PostgreSQL connection pool
@@ -119,29 +119,29 @@ const authenticateToken = (req, res, next) => {
 
 const wardrobeDetails = async (userId) => {
 
-      const query = 'SELECT id, image_url, description FROM outfits WHERE user_id = $1';
-      const values = [userId];
-  
-      const result = await pool.query(query, values);
-  
-      // Build the prompt using the fetched data
-      if (result.rows.length > 0) {
+    const query = 'SELECT id, image_url, description FROM outfits WHERE user_id = $1';
+    const values = [userId];
+
+    const result = await pool.query(query, values);
+
+    // Build the prompt using the fetched data
+    if (result.rows.length > 0) {
         let prompt = 'You Are A Fashion Expert And You have to suggest outfit for today from my wardorbe.These are my clothes in my wardrobe:\n\n';
         result.rows.forEach((row, index) => {
-          prompt += `Cloth ${row.id}\n`;          
-          prompt += `   Image URL: ${row.image_url}\n`;
-          prompt += `   Description: ${row.description}\n\n`;
+            prompt += `Cloth ${row.id}\n`;
+            prompt += `   Image URL: ${row.image_url}\n`;
+            prompt += `   Description: ${row.description}\n\n`;
         });
         return prompt;
-        
-      } else {
+
+    } else {
         return null;
-      }
+    }
 }
 
-const  generatePrompt=async(data)=> {
+const generatePrompt = async (data) => {
     // Group tags by category
-    
+
     const groupedData = data.reduce((acc, item) => {
         if (!acc[item.category]) {
             acc[item.category] = "";
@@ -149,15 +149,15 @@ const  generatePrompt=async(data)=> {
         acc[item.category] += acc[item.category] ? `, ${item.tag}` : item.tag;
         return acc;
     }, {});
-    
+
     // Print all values
-    var finalString=''
+    var finalString = ''
     for (const [category, tags] of Object.entries(groupedData)) {
-        finalString+=`${category}: ${tags},`;
+        finalString += `${category}: ${tags},`;
     }
 
     return finalString;
-   
+
 }
 
 // API Endpoints
@@ -226,29 +226,29 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         const uploadResult = await s3.upload(params).promise();
         var description = '';
         // Call Flask API to process the image
-        try{
+        try {
             const flaskResponse = await axios.post(`${process.env.API_URL}/process-image`, {
                 image_url: `https://d26666n82ym1ga.cloudfront.net/${fileKey}`,
             });
-    
+
             description = flaskResponse.data.caption;
         }
         catch (flaskError) {
             console.error('Flask API failed:', flaskError.message);
             description = 'Description unavailable'; // Default value in case of failure
         }
-        
+
 
         cleanupFile(req.file.path);
 
-        
+
 
         // // Delete the file from the local file system after uploading to S3
         // fs.unlinkSync(req.file.path);
 
         // Save metadata in the database
-        const imageUrl = "https://d26666n82ym1ga.cloudfront.net/"+fileKey; // S3 file URL
-        
+        const imageUrl = "https://d26666n82ym1ga.cloudfront.net/" + fileKey; // S3 file URL
+
         const result = await pool.query(
             'INSERT INTO outfits (user_id, image_url, category, tags,description) VALUES ($1, $2, $3, $4,$5) RETURNING id',
             [userId, imageUrl, category, tags, description]
@@ -269,19 +269,19 @@ app.post('/upload', upload.single('image'), async (req, res) => {
 
 app.get('/wardrobe-details', async (req, res) => {
     const userId = req.userId; // Extracted from middleware after authentication
-  
+
     try {
-      // Query to fetch wardrobe details for the given user_id
-      var prompt = await wardrobeDetails(userId);
-      if (prompt) {
-        res.json({ prompt });
-      } else {
-        res.status(404).json({ error: 'Wardrobe details not found' });
-      }
-      
+        // Query to fetch wardrobe details for the given user_id
+        var prompt = await wardrobeDetails(userId);
+        if (prompt) {
+            res.json({ prompt });
+        } else {
+            res.status(404).json({ error: 'Wardrobe details not found' });
+        }
+
     } catch (err) {
-      console.error('Error fetching wardrobe details:', err);
-      res.status(500).json({ error: 'Failed to fetch wardrobe details', details: err.message });
+        console.error('Error fetching wardrobe details:', err);
+        res.status(500).json({ error: 'Failed to fetch wardrobe details', details: err.message });
     }
 });
 
@@ -389,10 +389,10 @@ app.delete('/outfits/:id', async (req, res) => {
 
 app.post('/ootd', async (req, res) => {
     const userId = req.userId; // Extracted from middleware after authentication
-    
-    var clothData= await wardrobeDetails(userId);
+
+    var clothData = await wardrobeDetails(userId);
     var prompt = await generatePrompt(req.body);
-    var promptToSent = clothData+'\nMy preference are as follows '+ prompt;
+    var promptToSent = clothData + '\nMy preference are as follows ' + prompt;
     try {
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
@@ -410,15 +410,96 @@ app.post('/ootd', async (req, res) => {
             temperature: 0.7,
         });
 
-        
-        res.json(response.choices[0].message.content.trim());
+        var result = response.choices[0].message.content.trim();
+
+        const options = {};
+        const sections = result.split("### Outfit Option"); // Split by outfit options
+        sections.forEach((section, index) => {
+            if (index === 0) return; // Skip the intro part
+            const optionKey = `Option ${index}`;
+            const matches = [...section.matchAll(/-\s\*\*(.*?)\*\*.*?\(Cloth (\d+)\)/g)];
+            options[optionKey] = matches.map(match => ({
+                key: match[1], // Key enclosed in **
+                clothId: match[2], // Extracted cloth ID
+            }));
+        });
+
+        var resp = await updateOptionsWithUrls(options)
+            .then(updatedOptions => {
+                return updatedOptions;
+            })
+            .catch(error => {
+                console.error("Error:", error);
+            });
+
+        res.json(resp);
     } catch (error) {
         console.error("Error with OpenAI API:", error);
         throw error;
     }
-    
-    
 });
+
+const updateOptionsWithUrls = async (options) => {
+    try {
+        // Extract all cloth IDs from the options object
+        const clothIds = [...new Set(
+            Object.values(options).flatMap(option => option.map(item => item.clothId))
+        )];
+
+        // Fetch corresponding records from the database
+        const query = `
+            SELECT id, image_url 
+            FROM outfits 
+            WHERE id = ANY($1)
+        `;
+        const res = await pool.query(query, [clothIds]);
+
+        // Create a mapping of cloth IDs to image URLs
+        const clothDatabase = res.rows.reduce((acc, record) => {
+            acc[record.id] = record.image_url;
+            return acc;
+        }, {});
+
+        // Update the `options` object by replacing `clothId` with the image URL
+        Object.keys(options).forEach(optionKey => {
+            options[optionKey] = options[optionKey].map(item => ({
+                ...item,
+                clothId: clothDatabase[item.clothId] || item.clothId // Replace with URL or keep original ID if not found
+            }));
+        });
+
+        return options;
+    } catch (error) {
+        console.error("Error fetching data from database:", error);
+        throw error;
+    }
+};
+
+// app.post('/test', async (req, res) => {
+//     var result = req.body.data;
+//     console.log('result:', result)
+//     const options = {};
+//     const sections = result.split("### Outfit Option"); // Split by outfit options
+//     sections.forEach((section, index) => {
+//         if (index === 0) return; // Skip the intro part
+//         const optionKey = `Option ${index}`;
+//         const matches = [...section.matchAll(/-\s\*\*(.*?)\*\*.*?\(Cloth (\d+)\)/g)];
+//         options[optionKey] = matches.map(match => ({
+//             key: match[1], // Key enclosed in **
+//             clothId: match[2], // Extracted cloth ID
+//         }));
+//     });
+//     console.log('options:', options)
+//     var response = await updateOptionsWithUrls(options)
+//         .then(updatedOptions => {
+//             return updatedOptions;
+//         })
+//         .catch(error => {
+//             console.error("Error:", error);
+//         });
+
+//     res.json(response);
+// });
 
 // Start server
 app.listen(port, () => {
