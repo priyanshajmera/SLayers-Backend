@@ -12,7 +12,15 @@ const AWS = require('aws-sdk');
 const axios = require('axios');
 const { spawn } = require('child_process');
 
+const { OpenAI } = require("openai");
+
+
+
 require('dotenv').config();
+
+const openai = new OpenAI({
+    apiKey: process.env.OPEN_AI_API, // Replace with your OpenAI API key
+});
 
 // Initialize the app and database connection
 const app = express();
@@ -108,6 +116,49 @@ const authenticateToken = (req, res, next) => {
         res.status(401).json({ error: 'Invalid or expired token' });
     }
 };
+
+const wardrobeDetails = async (userId) => {
+
+      const query = 'SELECT id, image_url, description FROM outfits WHERE user_id = $1';
+      const values = [userId];
+  
+      const result = await pool.query(query, values);
+  
+      // Build the prompt using the fetched data
+      if (result.rows.length > 0) {
+        let prompt = 'You Are A Fashion Expert And You have to suggest outfit for today from my wardorbe.These are my clothes in my wardrobe:\n\n';
+        result.rows.forEach((row, index) => {
+          prompt += `Cloth ${row.id}\n`;          
+          prompt += `   Image URL: ${row.image_url}\n`;
+          prompt += `   Description: ${row.description}\n\n`;
+        });
+        return prompt;
+        
+      } else {
+        return null;
+      }
+}
+
+const  generatePrompt=async(data)=> {
+    // Group tags by category
+    
+    const groupedData = data.reduce((acc, item) => {
+        if (!acc[item.category]) {
+            acc[item.category] = "";
+        }
+        acc[item.category] += acc[item.category] ? `, ${item.tag}` : item.tag;
+        return acc;
+    }, {});
+    
+    // Print all values
+    var finalString=''
+    for (const [category, tags] of Object.entries(groupedData)) {
+        finalString+=`${category}: ${tags},`;
+    }
+
+    return finalString;
+   
+}
 
 // API Endpoints
 
@@ -221,25 +272,13 @@ app.get('/wardrobe-details', async (req, res) => {
   
     try {
       // Query to fetch wardrobe details for the given user_id
-      const query = 'SELECT id, image_url, description FROM outfits WHERE user_id = $1';
-      const values = [userId];
-  
-      const result = await pool.query(query, values);
-  
-      // Build the prompt using the fetched data
-      if (result.rows.length > 0) {
-        let prompt = 'These are my clothes in my wardrobe:\n\n';
-        result.rows.forEach((row, index) => {
-          prompt += `${index + 1}. Cloth ${index + 1}\n`;
-          
-          prompt += `   Image URL: ${row.image_url}\n`;
-          prompt += `   Description: ${row.description}\n\n`;
-        });
+      var prompt = await wardrobeDetails(userId);
+      if (prompt) {
         res.json({ prompt });
-        
       } else {
-        res.status(404).json({ error: 'No wardrobe details found for the given user.' });
+        res.status(404).json({ error: 'Wardrobe details not found' });
       }
+      
     } catch (err) {
       console.error('Error fetching wardrobe details:', err);
       res.status(500).json({ error: 'Failed to fetch wardrobe details', details: err.message });
@@ -346,6 +385,39 @@ app.delete('/outfits/:id', async (req, res) => {
         console.error('Error deleting outfit:', err.message);
         res.status(500).json({ error: 'Failed to delete outfit', details: err.message });
     }
+});
+
+app.post('/ootd', async (req, res) => {
+    const userId = req.userId; // Extracted from middleware after authentication
+    
+    var clothData= await wardrobeDetails(userId);
+    var prompt = await generatePrompt(req.body);
+    var promptToSent = clothData+'\nMy preference are as follows '+ prompt;
+    try {
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a helpful assistant that creates suggestions based on user preferences.",
+                },
+                {
+                    role: "user",
+                    content: promptToSent,
+                },
+            ],
+            max_tokens: 300,
+            temperature: 0.7,
+        });
+
+        
+        res.json(response.choices[0].message.content.trim());
+    } catch (error) {
+        console.error("Error with OpenAI API:", error);
+        throw error;
+    }
+    
+    
 });
 
 // Start server
