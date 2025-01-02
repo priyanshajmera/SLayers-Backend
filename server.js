@@ -392,7 +392,7 @@ app.post('/ootd', async (req, res) => {
 
     var clothData = await wardrobeDetails(userId);
     var prompt = await generatePrompt(req.body);
-    var promptToSent = clothData + '\nMy preference are as follows ' + prompt;
+    var promptToSent = clothData + '\nMy preference are as follows ' + prompt + ' Please Give output Like option 1 then cloth category inside it like top:cloth suggestion,bottom:cloth suggestion etc.';
     try {
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
