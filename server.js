@@ -411,7 +411,7 @@ app.post('/ootd', async (req, res) => {
         });
 
         var result = response.choices[0].message.content.trim();
-
+        console.log('openai resule:', result);
         const options = {};
         const sections = result.split("### Outfit Option"); // Split by outfit options
         sections.forEach((section, index) => {
@@ -423,6 +423,7 @@ app.post('/ootd', async (req, res) => {
                 clothId: match[2], // Extracted cloth ID
             }));
         });
+        console.log('options:', options);
 
         var resp = await updateOptionsWithUrls(options)
             .then(updatedOptions => {
@@ -431,7 +432,7 @@ app.post('/ootd', async (req, res) => {
             .catch(error => {
                 console.error("Error:", error);
             });
-
+        console.log('final:', resp);
         res.json(resp);
     } catch (error) {
         console.error("Error with OpenAI API:", error);
