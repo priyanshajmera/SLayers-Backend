@@ -126,10 +126,10 @@ const wardrobeDetails = async (userId) => {
 
     // Build the prompt using the fetched data
     if (result.rows.length > 0) {
-        let prompt = 'You Are A Fashion Expert And You have to suggest outfit for today from my wardorbe.These are my clothes in my wardrobe:\n\n';
+        let prompt = 'You Are A Fashion Expert These are clothes in my wardrobe:\n\n';
         result.rows.forEach((row, index) => {
             prompt += `Cloth ${row.id}\n`;
-            prompt += `   Image URL: ${row.image_url}\n`;
+            // prompt += `   Image URL: ${row.image_url}\n`;
             prompt += `   Description: ${row.description}\n\n`;
         });
         return prompt;
@@ -382,7 +382,7 @@ app.delete('/outfits/:id', async (req, res) => {
 
         res.json({ message: 'Outfit deleted successfully' });
     } catch (err) {
-        console.error('Error deleting outfit:', err.message);
+        
         res.status(500).json({ error: 'Failed to delete outfit', details: err.message });
     }
 });
@@ -392,7 +392,11 @@ app.post('/ootd', async (req, res) => {
 
     var clothData = await wardrobeDetails(userId);
     var prompt = await generatePrompt(req.body);
-    var promptToSent = clothData + '\nMy preference are as follows ' + prompt + ' Please Give output Like option 1 then cloth category inside it like top:cloth suggestion,bottom:cloth suggestion etc.';
+    var promptToSent =
+        clothData +
+        '\nTask: Based on the provided wardrobe, suggest an outfit for the given categories.' + '\nMy preference are as follows '
+        + prompt +
+        '\nsuggest outfit options. Each option must include Top, Bottom, and optionally Accessories or Footwear, and must follow the exact format.';
     try {
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
@@ -409,21 +413,25 @@ app.post('/ootd', async (req, res) => {
             max_tokens: 300,
             temperature: 0.7,
         });
-
+        
         var result = response.choices[0].message.content.trim();
-        console.log('openai resule:', result);
+        
         const options = {};
-        const sections = result.split("### Outfit Option"); // Split by outfit options
+        const sections = result.split(/\*\*Outfit Option \d+:?\*\*/); // Split by "Outfit Option X"
         sections.forEach((section, index) => {
             if (index === 0) return; // Skip the intro part
             const optionKey = `Option ${index}`;
-            const matches = [...section.matchAll(/-\s\*\*(.*?)\*\*.*?\(Cloth (\d+)\)/g)];
+
+            // Regex to match parts like Top, Bottom, Accessories with Cloth ID
+            const matches = [...section.matchAll(/-\s\*\*(.*?)\*\*.*?\Cloth (\d+)/g)];
             options[optionKey] = matches.map(match => ({
-                key: match[1], // Key enclosed in **
-                clothId: match[2], // Extracted cloth ID
+                key: match[1], // Captures "Top", "Bottom", "Accessories", etc.
+                clothId: match[2], // Captures the cloth number
             }));
         });
-        console.log('options:', options);
+
+
+        
 
         var resp = await updateOptionsWithUrls(options)
             .then(updatedOptions => {
@@ -432,7 +440,7 @@ app.post('/ootd', async (req, res) => {
             .catch(error => {
                 console.error("Error:", error);
             });
-        console.log('final:', resp);
+        
         res.json(resp);
     } catch (error) {
         console.error("Error with OpenAI API:", error);
