@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    image: slayers-backend:latest
+    container_name: slayers-backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env  # Include the .env file
+    restart: unless-stopped  # Automatically restart the container unless explicitly stopped
+    networks:
+      - app-network
+
+  frontend:
+    image: frontend-app:latest
+    container_name: frontend-app
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped  # Automatically restart the container unless explicitly stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
