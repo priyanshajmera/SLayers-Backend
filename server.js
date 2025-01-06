@@ -126,7 +126,7 @@ const wardrobeDetails = async (userId) => {
 
     // Build the prompt using the fetched data
     if (result.rows.length > 0) {
-        let prompt = 'You Are A Fashion Expert These are clothes in my wardrobe:\n\n';
+        let prompt = 'You are a friendly fashion expert who generates outfits suggentions based on clothes descriptions. These are clothes in my wardrobe:\n\n';
         result.rows.forEach((row, index) => {
             prompt += `Cloth ${row.id}\n`;
             // prompt += `   Image URL: ${row.image_url}\n`;
@@ -396,14 +396,14 @@ app.post('/ootd', async (req, res) => {
         clothData +
         '\nTask: Based on the provided wardrobe, suggest an outfit for the given categories.' + '\nMy preference are as follows '
         + prompt +
-        '\nsuggest outfit options. Each option must include Top, Bottom, and optionally Accessories or Footwear, and must follow the exact format.';
+        '\nsuggest outfit options. Generate the following: Top, Bottom, and optionally Accessories or Footwear, etc and always categorize the response with OUTFIT OPTION NUMBER';
     try {
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
                 {
                     role: "system",
-                    content: "You are a helpful assistant that creates suggestions based on user preferences.",
+                    content: "You are a helpful assistant that creates outfit suggestions based on user preferences.",
                 },
                 {
                     role: "user",
@@ -423,7 +423,7 @@ app.post('/ootd', async (req, res) => {
             const optionKey = `Option ${index}`;
 
             // Regex to match parts like Top, Bottom, Accessories with Cloth ID
-            const matches = [...section.matchAll(/-\s\*\*(.*?)\*\*.*?\Cloth (\d+)/g)];
+            const matches = [...section.matchAll(/\*\*(.*?)\*\*.*?Cloth (\d+)/g)];
             options[optionKey] = matches.map(match => ({
                 key: match[1], // Captures "Top", "Bottom", "Accessories", etc.
                 clothId: match[2], // Captures the cloth number
