@@ -132,7 +132,7 @@ const wardrobeDetails = async (userId) => {
 
     // Build the prompt using the fetched data
     if (result.rows.length > 0) {
-        let prompt = 'You are a friendly fashion expert who generates outfits suggentions based on clothes descriptions:\n\n';
+        let prompt = 'Wardrobe Details:\n';
         result.rows.forEach((row, index) => {
             prompt += `Cloth ${row.id}\n`;
             // prompt += `   Image URL: ${row.image_url}\n`;
@@ -145,7 +145,7 @@ const wardrobeDetails = async (userId) => {
     }
 }
 
-const generatePrompt = async (data) => {
+const generatePreferences = async (data) => {
     // Group tags by category
 
     const groupedData = data.reduce((acc, item) => {
@@ -397,12 +397,23 @@ app.post('/ootd', async (req, res) => {
     const userId = req.userId; // Extracted from middleware after authentication
 
     var clothData = await wardrobeDetails(userId);
-    var prompt = await generatePrompt(req.body);
+    var preferences = await generatePreferences(req.body);
     var promptToSent =
         clothData +
-        '\nTask: Based on the provided wardrobe, suggest an outfit for the given categories.' + '\nMy preference are as follows '
-        + prompt +
-        '\nsuggest outfit options Always categorize the response with OUTFIT OPTION and Generate the following sub-category : Top, Bottom, and optionally layered , accessories or footwear, etc. if in input consist of these.';
+        '\nTask: Based on the provided wardrobe, suggest multiple outfit options for the given preferences:\n'
+        + preferences +
+        `\nResponse Format: Provide at least two options in the following format:
+        - OUTFIT OPTION 1:
+            - Top: Cloth number(e.g., Cloth 17)
+            - Bottom: Cloth number(e.g., Cloth 19)
+            - Layered(Only Mentioned in Given preferences):Cloth number(e.g., Cloth 21)
+            - Accessories / Footwear: Suggestions for accessories and footwear.
+        - OUTFIT OPTION 2:
+            - Top: Cloth number
+            - Bottom: Cloth number
+            - Layered(Only Mentioned in Given preferences):Cloth number(e.g., Cloth 21)
+            - Accessories / Footwear: Suggestions for accessories and footwear.  
+        Ensure all components reference the corresponding cloth numbers where applicable.Each outfit should be unique and tailored to the given preferences add layered items in options if mentioned in preferences.`;
     console.log('promptToSent:', promptToSent);
     try {
 
@@ -410,7 +421,7 @@ app.post('/ootd', async (req, res) => {
             `${AZURE_OPENAI_ENDPOINT}openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=2024-08-01-preview`,
             {
                 messages: [
-                    { role: 'system', content: 'You are a helpful fashion assistant that creates suggestions based on user preferences.' },
+                    { role: 'system', content: 'You are a friendly fashion expert specializing in generating outfit suggestions based on provided clothing descriptions.' },
                     { role: 'user', content: promptToSent }
                 ],
                 max_tokens: 300,
@@ -443,14 +454,14 @@ app.post('/ootd', async (req, res) => {
         var result = response.data.choices[0].message.content.trim();
         console.log('result:', result);
         const options = {};
-        const sections = result.split(/OUTFIT OPTION \d+:?/); // Split by "Outfit Option X"
+        const sections = result.split(/OUTFIT OPTION \d+:?/gi); // Split by "Outfit Option X"
         console.log('sections:', sections);
         sections.forEach((section, index) => {
             if (index === 0) return; // Skip the intro part
-            const optionKey = `Option ${index}`;
+            const optionKey = `Option ${index} `;
 
             // Regex to match parts like Top, Bottom, Accessories with Cloth ID
-            const matches = [...section.matchAll(/(\w+):?.*?Cloth\s(\d+)/g)];
+            const matches = [...section.matchAll(/(\w+):?.*?Cloth\s(\d+)/gi)];
             options[optionKey] = matches.map(match => ({
                 key: match[1], // Captures "Top", "Bottom", "Accessories", etc.
                 clothId: match[2], // Captures the cloth number
@@ -486,7 +497,7 @@ app.post('/virtualtryon', async (req, res) => {
     try {
         // Connect to the client
 
-        const client = await Client.connect("http://54.189.147.180:7860/");
+        const client = await Client.connect(process.env.GRADIO_API_KEY);
 
         // Make the API request and wait for the result
         const result = await client.predict("/process_dc", {
@@ -578,7 +589,7 @@ const updateOptionsWithUrls = async (options) => {
 //     const sections = result.split("### Outfit Option"); // Split by outfit options
 //     sections.forEach((section, index) => {
 //         if (index === 0) return; // Skip the intro part
-//         const optionKey = `Option ${index}`;
+//         const optionKey = `Option ${ index } `;
 //         const matches = [...section.matchAll(/-\s\*\*(.*?)\*\*.*?\(Cloth (\d+)\)/g)];
 //         options[optionKey] = matches.map(match => ({
 //             key: match[1], // Key enclosed in **
