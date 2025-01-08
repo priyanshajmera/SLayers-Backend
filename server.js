@@ -1,26 +1,32 @@
 // Import necessary modules
-const express = require('express');
-const bodyParser = require('body-parser');
-const multer = require('multer');
-const { Pool } = require('pg');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const path = require('path');
-const cors = require('cors');
-const fs = require('fs');
-const AWS = require('aws-sdk');
-const axios = require('axios');
-const { spawn } = require('child_process');
+import express from "express";
+import bodyParser from "body-parser";
+import multer from "multer";
+import pkg from 'pg';
 
-const { OpenAI } = require("openai");
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import path from "path";
+import cors from "cors";
+import fs from "fs";
+import AWS from "aws-sdk";
+import axios from "axios";
+import { spawn } from "child_process";
+import { Client } from "@gradio/client";
+import { OpenAI } from "openai";
+import dotenv from "dotenv";
 
+dotenv.config();
 
-
-require('dotenv').config();
-
+const { Pool } = pkg;
 const openai = new OpenAI({
     apiKey: process.env.OPEN_AI_API, // Replace with your OpenAI API key
 });
+
+const AZURE_OPENAI_ENDPOINT = 'https://pulki-m5mhzt4t-australiaeast.cognitiveservices.azure.com/';
+const AZURE_OPENAI_API_KEY = process.env.AZURE_OPEN_AI;
+const DEPLOYMENT_NAME = 'gpt-4';
+
 
 // Initialize the app and database connection
 const app = express();
@@ -396,25 +402,45 @@ app.post('/ootd', async (req, res) => {
         clothData +
         '\nTask: Based on the provided wardrobe, suggest an outfit for the given categories.' + '\nMy preference are as follows '
         + prompt +
-        '\nsuggest outfit options.always categorize the response with OUTFIT OPTION and Generate the following sub-category : Top, Bottom, and optionally layered , accessories or footwear, etc.';
+        '\nsuggest outfit options Always categorize the response with OUTFIT OPTION and Generate the following sub-category : Top, Bottom, and optionally layered , accessories or footwear, etc. if in input consist of these.';
+    console.log('promptToSent:', promptToSent);
     try {
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are a helpful assistant that creates suggestions based on user preferences.",
-                },
-                {
-                    role: "user",
-                    content: promptToSent,
-                },
-            ],
-            max_tokens: 300,
-            temperature: 0.7,
-        });
 
-        var result = response.choices[0].message.content.trim();
+        const response = await axios.post(
+            `${AZURE_OPENAI_ENDPOINT}openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=2024-08-01-preview`,
+            {
+                messages: [
+                    { role: 'system', content: 'You are a helpful fashion assistant that creates suggestions based on user preferences.' },
+                    { role: 'user', content: promptToSent }
+                ],
+                max_tokens: 300,
+                temperature: 0.7
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'api-key': AZURE_OPENAI_API_KEY
+                }
+            }
+        );
+
+        // const response = await openai.chat.completions.create({
+        //     model: "gpt-4o-mini",
+        //     messages: [
+        //         {
+        //             role: "system",
+        //             content: "You are a helpful assistant that creates suggestions based on user preferences.",
+        //         },
+        //         {
+        //             role: "user",
+        //             content: promptToSent,
+        //         },
+        //     ],
+        //     max_tokens: 300,
+        //     temperature: 0.7,
+        // });
+
+        var result = response.data.choices[0].message.content.trim();
         console.log('result:', result);
         const options = {};
         const sections = result.split(/OUTFIT OPTION \d+:?/); // Split by "Outfit Option X"
@@ -447,6 +473,66 @@ app.post('/ootd', async (req, res) => {
         console.error("Error with OpenAI API:", error);
         throw error;
     }
+});
+
+app.post('/virtualtryon', async (req, res) => {
+
+    console.log('req.body:', req.body);
+    //now we have to fetch the user image from user id that s3 url will go below
+    const response_0 = await fetch("https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png");
+    const userImage = await response_0.blob();
+    const response_1 = await fetch(req.body.top);
+    const garmentImage = await response_1.blob();
+    try {
+        // Connect to the client
+
+        const client = await Client.connect("http://54.189.147.180:7860/");
+
+        // Make the API request and wait for the result
+        const result = await client.predict("/process_dc", {
+            vton_img: userImage,
+            garm_img: garmentImage,
+            category: "Upper-body",
+            n_samples: 1,
+            n_steps: 20,
+            image_scale: 2,
+            seed: -1,
+        });
+
+        console.log('result:', result.data[0][0].image.url);
+
+        const upperImage = await fetch(result.data[0][0].image.url);
+        const upperImageBlob = await upperImage.blob();
+        const response_2 = await fetch(req.body.bottom);
+        const bottom = await response_2.blob();
+
+        const finaleOutput = await client.predict("/process_dc", {
+            vton_img: upperImageBlob,
+            garm_img: bottom,
+            category: "Lower-body",
+            n_samples: 1,
+            n_steps: 20,
+            image_scale: 2,
+            seed: -1,
+        });
+
+
+
+
+        console.log('Result:', finaleOutput.data[0][0].image.url);
+        // Return the response
+        res.json({
+            "top": req.body.top,
+            "bottom": req.body.bottom,
+            "output": finaleOutput.data[0][0].image.url
+        });
+    } catch (error) {
+        // Handle errors gracefully
+        console.error('Error during API call:', error);
+        res.status(500).json({ error: 'Failed to process the request' });
+    }
+
+
 });
 
 const updateOptionsWithUrls = async (options) => {
