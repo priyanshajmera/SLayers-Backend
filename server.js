@@ -15,8 +15,11 @@ import { spawn } from "child_process";
 import { Client } from "@gradio/client";
 import { OpenAI } from "openai";
 import dotenv from "dotenv";
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const { Pool } = pkg;
 const openai = new OpenAI({
@@ -214,17 +217,36 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     }
 
     try {
-        // Generate unique file path in S3
+        const filePath = req.file.path;
+
+        const imageBuffer = fs.readFileSync(filePath);
+        const base64Image = imageBuffer.toString("base64");
+
+
+
+        // Send request to Python API
+        const apiResponse = await axios.post(
+            `${process.env.API_URL}/remove-background/`,
+            { image_base64: base64Image },
+
+        );
+
+
+
+        // Handle the API response and send base64 image back to the client
+        const processedImageBase64 = apiResponse.data.image_base64;
+        const processedImageBuffer = Buffer.from(processedImageBase64, "base64");
+
+
         const fileKey = `User_${userId}/${Date.now()}`;
 
-        // Read the uploaded file from the local file system
-        const fileContent = fs.readFileSync(req.file.path);
+
 
         // Define S3 upload parameters
         const params = {
             Bucket: 'wardrobess', // Your S3 bucket name
             Key: fileKey,        // File path in S3
-            Body: fileContent,   // File content
+            Body: processedImageBuffer,  // File content
             ContentType: req.file.mimetype, // File MIME type
         };
 
@@ -341,13 +363,13 @@ app.get('/outfits/:id', async (req, res) => {
 // Edit Outfit
 app.put('/outfits/:id', async (req, res) => {
     const { id } = req.params;
-    const { category, tags } = req.body;
+    const { category, tags, description } = req.body;
     const userId = req.userId; // Extracted from middleware after authentication
 
     try {
         const result = await pool.query(
-            'UPDATE outfits SET category = $1, tags = $2 WHERE id = $3 AND user_id = $4 RETURNING id',
-            [category, tags, id, userId]
+            'UPDATE outfits SET category = $1, tags = $2 ,description= $5 WHERE id = $3 AND user_id = $4 RETURNING id',
+            [category, tags, id, userId, description]
         );
         if (result.rows.length === 0) return res.status(404).json({ error: 'Outfit not found or unauthorized' });
 
@@ -492,50 +514,48 @@ app.post('/virtualtryon', async (req, res) => {
     //now we have to fetch the user image from user id that s3 url will go below
     const response_0 = await fetch("https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png");
     const userImage = await response_0.blob();
-    const response_1 = await fetch(req.body.top);
-    const garmentImage = await response_1.blob();
+    
     try {
         // Connect to the client
 
         const client = await Client.connect(process.env.GRADIO_API_KEY);
 
+        
+        const response_2 = await fetch(req.body.bottom);
+        const bottom = await response_2.blob();
+
+        const bottomOutput = await client.predict("/process_dc", {
+            vton_img: userImage,
+            garm_img: bottom,
+            category: "Lower-body",
+            n_samples: 1,
+            n_steps: 22,
+            image_scale: 2.2,
+            seed: 5,
+        });
+
+        const response_1 = await fetch(req.body.top);
+        const topImage = await response_1.blob();
+        const bottomImage = await fetch(bottomOutput.data[0][0].image.url);
+        const bottomBlob = await bottomImage.blob();
         // Make the API request and wait for the result
         const result = await client.predict("/process_dc", {
-            vton_img: userImage,
-            garm_img: garmentImage,
+            vton_img: bottomBlob,
+            garm_img: topImage,
             category: "Upper-body",
             n_samples: 1,
-            n_steps: 20,
-            image_scale: 2,
-            seed: -1,
+            n_steps: 22,
+            image_scale: 2.2,
+            seed: 5,
         });
 
         console.log('result:', result.data[0][0].image.url);
 
-        const upperImage = await fetch(result.data[0][0].image.url);
-        const upperImageBlob = await upperImage.blob();
-        const response_2 = await fetch(req.body.bottom);
-        const bottom = await response_2.blob();
-
-        const finaleOutput = await client.predict("/process_dc", {
-            vton_img: upperImageBlob,
-            garm_img: bottom,
-            category: "Lower-body",
-            n_samples: 1,
-            n_steps: 20,
-            image_scale: 2,
-            seed: -1,
-        });
-
-
-
-
-        console.log('Result:', finaleOutput.data[0][0].image.url);
         // Return the response
         res.json({
             "top": req.body.top,
             "bottom": req.body.bottom,
-            "output": finaleOutput.data[0][0].image.url
+            "output": result.data[0][0].image.url
         });
     } catch (error) {
         // Handle errors gracefully
