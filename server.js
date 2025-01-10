@@ -92,16 +92,40 @@ const dbSetup = async () => {
             id SERIAL PRIMARY KEY,
             username VARCHAR(50) NOT NULL,
             email VARCHAR(100) UNIQUE NOT NULL,
-            password VARCHAR(200) NOT NULL
+            password VARCHAR(200) NOT NULL,
+            gender VARCHAR(10) not null,
+            dob DATE not null,
+            phone VARCHAR(10)           
         );`,
+        `DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'gender') THEN
+                ALTER TABLE users ADD COLUMN gender VARCHAR(100);
+            END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'dob') THEN
+                ALTER TABLE users ADD COLUMN dob DATE;
+            END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
+                ALTER TABLE users ADD COLUMN phone VARCHAR(10);
+            END IF;
+        END $$;`,
         `CREATE TABLE IF NOT EXISTS outfits (
             id SERIAL PRIMARY KEY,
             user_id INT REFERENCES users(id),
             image_url VARCHAR(255) NOT NULL,
             category VARCHAR(50),
             description TEXT,
-            tags TEXT
+            tags TEXT,
+            subcategory varchar(50)
         );`,
+        `DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'outfits' AND column_name = 'subcategory') THEN
+                ALTER TABLE outfits ADD COLUMN subcategory VARCHAR(100);
+            END IF;
+        END $$;`
     ];
     for (const query of queries) {
         await pool.query(query);
@@ -128,7 +152,7 @@ const authenticateToken = (req, res, next) => {
 
 const wardrobeDetails = async (userId) => {
 
-    const query = 'SELECT id, image_url, description FROM outfits WHERE user_id = $1';
+    const query = 'SELECT id, image_url, description,category,subcategory FROM outfits WHERE user_id = $1';
     const values = [userId];
 
     const result = await pool.query(query, values);
@@ -138,6 +162,8 @@ const wardrobeDetails = async (userId) => {
         let prompt = 'Wardrobe Details:\n';
         result.rows.forEach((row, index) => {
             prompt += `Cloth ${row.id}\n`;
+            prompt += `Category ${row.category}\n`;
+            prompt += `Sub-category ${row.subcategory}\n`;
             // prompt += `   Image URL: ${row.image_url}\n`;
             prompt += `   Description: ${row.description}\n\n`;
         });
@@ -173,12 +199,12 @@ const generatePreferences = async (data) => {
 
 // Signup/Register
 app.post('/signup', async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, phone, gender, dob } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await pool.query(
-            'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id',
-            [username, email, hashedPassword]
+            'INSERT INTO users (username, email, password,phone,gender,dob) VALUES ($1, $2, $3,$4,$5,$6) RETURNING id',
+            [username, email, hashedPassword, phone, gender, dob]
         );
         res.status(201).json({ message: 'User registered successfully', userId: result.rows[0].id });
     } catch (err) {
@@ -196,20 +222,104 @@ app.post('/signin', async (req, res) => {
         const user = result.rows[0];
         const passwordMatch = await bcrypt.compare(password, user.password);
         if (!passwordMatch) return res.status(401).json({ error: 'Invalid credentials' });
-
+        var userDataToSend = {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "gender": user.gender,
+        }
         const token = generateToken(user.id);
-        res.json({ message: 'Sign in successful', token });
+        res.json({ message: 'Sign in successful', token, userDataToSend });
     } catch (err) {
         res.status(500).json({ error: 'Sign in failed', details: err.message });
     }
 });
 
+
+
 // Apply authentication middleware for protected routes only
 app.use(authenticateToken);
 
+app.get('/profile', async (req, res) => {
+    const userId = req.userId; // Get user ID from URL params
+
+    try {
+        // Query to fetch user by ID
+        const query = 'SELECT id,username,email,gender,dob,phone FROM users WHERE id = $1';
+        const result = await pool.query(query, [userId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        return res.status(200).json(result.rows[0]); // Return the first matching user
+    } catch (err) {
+        console.error('Error executing query:', err.message);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+app.put('/profile', async (req, res) => {
+    const userId = req.userId; // Get user ID from the request (assuming it's authenticated)
+    const { username, email, phone, gender, dob, currentPassword, newPassword } = req.body;
+
+    try {
+        // Check if user exists
+        const userCheckQuery = 'SELECT * FROM users WHERE id = $1';
+        const userCheckResult = await pool.query(userCheckQuery, [userId]);
+
+        if (userCheckResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user = userCheckResult.rows[0];
+
+        // Validate current password if a new password is provided
+        if (newPassword) {
+            if (!currentPassword) {
+                return res.status(400).json({ message: 'Current password is required to change the password.' });
+            }
+
+
+            const isMatch = await bcrypt.compare(currentPassword, user.password);
+
+            if (!isMatch) {
+                return res.status(400).json({ message: 'Current password is incorrect.' });
+            }
+
+            // Hash the new password
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+            // Update the password
+            const passwordUpdateQuery = 'UPDATE users SET password = $1 WHERE id = $2';
+            await pool.query(passwordUpdateQuery, [hashedPassword, userId]);
+        }
+
+        // Update other user details
+        const updateQuery = `
+        UPDATE users
+        SET 
+          username = COALESCE($1, username),
+          email = COALESCE($2, email),
+          phone = COALESCE($3, phone),
+          gender = COALESCE($4, gender),
+          dob = COALESCE($5, dob)
+        WHERE id = $6
+        RETURNING id,username,email,gender,dob,phone;
+      `;
+        const updateResult = await pool.query(updateQuery, [username, email, phone, gender, dob, userId]);
+
+        // Return the updated user details
+        return res.status(200).json({ message: 'Profile updated successfully', user: updateResult.rows[0] });
+    } catch (err) {
+        console.error('Error updating profile:', err.message);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
 // File Upload
 app.post('/upload', upload.single('image'), async (req, res) => {
-    const { category, tags } = req.body;
+    const { category, tags, subcategory } = req.body;
     const userId = req.userId; // Extracted from middleware after authentication
 
     if (!req.file) {
@@ -278,8 +388,8 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         const imageUrl = "https://d26666n82ym1ga.cloudfront.net/" + fileKey; // S3 file URL
 
         const result = await pool.query(
-            'INSERT INTO outfits (user_id, image_url, category, tags,description) VALUES ($1, $2, $3, $4,$5) RETURNING id',
-            [userId, imageUrl, category, tags, description]
+            'INSERT INTO outfits (user_id, image_url, category,subcategory ,tags,description,) VALUES ($1, $2, $3, $4,$5,$6) RETURNING id',
+            [userId, imageUrl, category, subcategory, tags, description]
         );
 
         res.status(201).json({
@@ -514,13 +624,13 @@ app.post('/virtualtryon', async (req, res) => {
     //now we have to fetch the user image from user id that s3 url will go below
     const response_0 = await fetch("https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png");
     const userImage = await response_0.blob();
-    
+
     try {
         // Connect to the client
 
         const client = await Client.connect(process.env.GRADIO_API_KEY);
 
-        
+
         const response_2 = await fetch(req.body.bottom);
         const bottom = await response_2.blob();
 
@@ -602,31 +712,7 @@ const updateOptionsWithUrls = async (options) => {
     }
 };
 
-// app.post('/test', async (req, res) => {
-//     var result = req.body.data;
-//     console.log('result:', result)
-//     const options = {};
-//     const sections = result.split("### Outfit Option"); // Split by outfit options
-//     sections.forEach((section, index) => {
-//         if (index === 0) return; // Skip the intro part
-//         const optionKey = `Option ${ index } `;
-//         const matches = [...section.matchAll(/-\s\*\*(.*?)\*\*.*?\(Cloth (\d+)\)/g)];
-//         options[optionKey] = matches.map(match => ({
-//             key: match[1], // Key enclosed in **
-//             clothId: match[2], // Extracted cloth ID
-//         }));
-//     });
-//     console.log('options:', options)
-//     var response = await updateOptionsWithUrls(options)
-//         .then(updatedOptions => {
-//             return updatedOptions;
-//         })
-//         .catch(error => {
-//             console.error("Error:", error);
-//         });
 
-//     res.json(response);
-// });
 
 // Start server
 app.listen(port, () => {
