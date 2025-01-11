@@ -657,10 +657,23 @@ app.post('/ootd', async (req, res) => {
 });
 
 app.post('/virtualtryon', async (req, res) => {
-
-    console.log('req.body:', req.body);
+    const userId=req.userId;
+    const userCheckQuery = 'SELECT gender,profileimageurl FROM users WHERE id = $1';
+    const userCheckResult = await pool.query(userCheckQuery, [userId]);
+    var defaultImageurl='';
+    if(!userCheckResult.rows[0].profileimageurl){
+        if(userCheckResult.rows[0].gender=='male'){
+            defaultImageurl='https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/ba5ba7978e7302e8ab5eb733cc7221394c4e6faf/model_5.png'
+        }
+        else{
+            defaultImageurl=-'https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png'
+        }
+    }
+    else{
+        defaultImageurl=userCheckResult.rows[0].profileimageurl;
+    }
     //now we have to fetch the user image from user id that s3 url will go below
-    const response_0 = await fetch("https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png");
+    const response_0 = await fetch(defaultImageurl);
     const userImage = await response_0.blob();
 
     try {
