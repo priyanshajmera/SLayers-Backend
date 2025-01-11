@@ -95,7 +95,8 @@ const dbSetup = async () => {
             password VARCHAR(200) NOT NULL,
             gender VARCHAR(10) not null,
             dob DATE not null,
-            phone VARCHAR(10)           
+            phone VARCHAR(10),
+            profileimageurl varchar(255)          
         );`,
         `DO $$
         BEGIN
@@ -109,6 +110,9 @@ const dbSetup = async () => {
 
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone') THEN
                 ALTER TABLE users ADD COLUMN phone VARCHAR(10);
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'profileimageurl') THEN
+                ALTER TABLE users ADD COLUMN profileimageurl VARCHAR(255);
             END IF;
         END $$;`,
         `CREATE TABLE IF NOT EXISTS outfits (
@@ -161,7 +165,7 @@ const wardrobeDetails = async (userId) => {
     if (result.rows.length > 0) {
         let prompt = 'Wardrobe Details:\n';
         result.rows.forEach((row, index) => {
-            prompt += `Cloth ${row.id}\n`;
+            prompt += `Item ${row.id}\n`;
             prompt += `Category ${row.category}\n`;
             prompt += `Sub-category ${row.subcategory}\n`;
             // prompt += `   Image URL: ${row.image_url}\n`;
@@ -245,7 +249,7 @@ app.get('/profile', async (req, res) => {
 
     try {
         // Query to fetch user by ID
-        const query = 'SELECT id,username,email,gender,dob,phone FROM users WHERE id = $1';
+        const query = 'SELECT id,username,email,gender,dob,phone,profileimageurl FROM users WHERE id = $1';
         const result = await pool.query(query, [userId]);
 
         if (result.rows.length === 0) {
@@ -259,10 +263,10 @@ app.get('/profile', async (req, res) => {
     }
 });
 
-app.put('/profile', async (req, res) => {
+app.put('/profile', upload.single('profileimageurl'), async (req, res) => {
     const userId = req.userId; // Get user ID from the request (assuming it's authenticated)
     const { username, email, phone, gender, dob, currentPassword, newPassword } = req.body;
-
+    var profileimageurl=null;
     try {
         // Check if user exists
         const userCheckQuery = 'SELECT * FROM users WHERE id = $1';
@@ -271,6 +275,44 @@ app.put('/profile', async (req, res) => {
         if (userCheckResult.rows.length === 0) {
             return res.status(404).json({ message: 'User not found' });
         }
+
+         // Extracted from middleware after authentication
+
+        if (req.file) {
+            const filePath = req.file.path;
+
+            const imageBuffer = fs.readFileSync(filePath);
+            const base64Image = imageBuffer.toString("base64");
+            // Send request to Python API
+            const apiResponse = await axios.post(
+                `${process.env.API_URL}/remove-background/`,
+                { image_base64: base64Image },
+
+            );
+            // Handle the API response and send base64 image back to the client
+            const processedImageBase64 = apiResponse.data.image_base64;
+            const processedImageBuffer = Buffer.from(processedImageBase64, "base64");
+
+
+            const fileKey = `User_${userId}/ProfileImage/${Date.now()}`;
+
+
+
+            // Define S3 upload parameters
+            const params = {
+                Bucket: 'wardrobess', // Your S3 bucket name
+                Key: fileKey,        // File path in S3
+                Body: processedImageBuffer,  // File content
+                ContentType: req.file.mimetype, // File MIME type
+            };
+
+            // Upload file to S3
+            const uploadResult = await s3.upload(params).promise();
+            profileimageurl = `https://d26666n82ym1ga.cloudfront.net/${fileKey}`
+        }
+
+
+
 
         const user = userCheckResult.rows[0];
 
@@ -303,11 +345,13 @@ app.put('/profile', async (req, res) => {
           email = COALESCE($2, email),
           phone = COALESCE($3, phone),
           gender = COALESCE($4, gender),
-          dob = COALESCE($5, dob)
+          dob = COALESCE($5, dob),
+          profileimageurl=COALESCE($7, profileimageurl)
+
         WHERE id = $6
-        RETURNING id,username,email,gender,dob,phone;
+        RETURNING id,username,email,gender,dob,phone,profileimageurl;
       `;
-        const updateResult = await pool.query(updateQuery, [username, email, phone, gender, dob, userId]);
+        const updateResult = await pool.query(updateQuery, [username, email, phone, gender, dob, userId,profileimageurl]);
 
         // Return the updated user details
         return res.status(200).json({ message: 'Profile updated successfully', user: updateResult.rows[0] });
@@ -331,18 +375,12 @@ app.post('/upload', upload.single('image'), async (req, res) => {
 
         const imageBuffer = fs.readFileSync(filePath);
         const base64Image = imageBuffer.toString("base64");
-
-
-
         // Send request to Python API
         const apiResponse = await axios.post(
             `${process.env.API_URL}/remove-background/`,
             { image_base64: base64Image },
 
         );
-
-
-
         // Handle the API response and send base64 image back to the client
         const processedImageBase64 = apiResponse.data.image_base64;
         const processedImageBuffer = Buffer.from(processedImageBase64, "base64");
@@ -388,7 +426,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
         const imageUrl = "https://d26666n82ym1ga.cloudfront.net/" + fileKey; // S3 file URL
 
         const result = await pool.query(
-            'INSERT INTO outfits (user_id, image_url, category,subcategory ,tags,description,) VALUES ($1, $2, $3, $4,$5,$6) RETURNING id',
+            'INSERT INTO outfits (user_id, image_url, category,subcategory ,tags,description) VALUES ($1, $2, $3, $4,$5,$6) RETURNING id',
             [userId, imageUrl, category, subcategory, tags, description]
         );
 
@@ -473,13 +511,13 @@ app.get('/outfits/:id', async (req, res) => {
 // Edit Outfit
 app.put('/outfits/:id', async (req, res) => {
     const { id } = req.params;
-    const { category, tags, description } = req.body;
+    const { category, tags, description, subcategory } = req.body;
     const userId = req.userId; // Extracted from middleware after authentication
 
     try {
         const result = await pool.query(
-            'UPDATE outfits SET category = $1, tags = $2 ,description= $5 WHERE id = $3 AND user_id = $4 RETURNING id',
-            [category, tags, id, userId, description]
+            'UPDATE outfits SET category = $1, tags = $2 ,description= $5,subcategory=$6 WHERE id = $3 AND user_id = $4 RETURNING id',
+            [category, tags, id, userId, description, subcategory]
         );
         if (result.rows.length === 0) return res.status(404).json({ error: 'Outfit not found or unauthorized' });
 
@@ -536,16 +574,16 @@ app.post('/ootd', async (req, res) => {
         + preferences +
         `\nResponse Format: Provide at least two options in the following format:
         - OUTFIT OPTION 1:
-            - Top: Cloth number(e.g., Cloth 17)
-            - Bottom: Cloth number(e.g., Cloth 19)
-            - Layered(Only Mentioned in Given preferences):Cloth number(e.g., Cloth 21)
+            - Top: Item number(e.g., Item 17)
+            - Bottom: Item number(e.g., Item 19)
+            - Layered(Only Mentioned in Given preferences):Item number(e.g., Item 21)
             - Accessories / Footwear: Suggestions for accessories and footwear.
         - OUTFIT OPTION 2:
-            - Top: Cloth number
-            - Bottom: Cloth number
-            - Layered(Only Mentioned in Given preferences):Cloth number(e.g., Cloth 21)
+            - Top: Item number
+            - Bottom: Item number
+            - Layered(Only Mentioned in Given preferences):Item number(e.g., Item 21)
             - Accessories / Footwear: Suggestions for accessories and footwear.  
-        Ensure all components reference the corresponding cloth numbers where applicable.Each outfit should be unique and tailored to the given preferences add layered items in options if mentioned in preferences.`;
+        Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique and tailored to the given preferences add layered items in options if mentioned in preferences.`;
     console.log('promptToSent:', promptToSent);
     try {
 
@@ -593,7 +631,7 @@ app.post('/ootd', async (req, res) => {
             const optionKey = `Option ${index} `;
 
             // Regex to match parts like Top, Bottom, Accessories with Cloth ID
-            const matches = [...section.matchAll(/(\w+):?.*?Cloth\s(\d+)/gi)];
+            const matches = [...section.matchAll(/(\w+):?.*?Item\s(\d+)/gi)];
             options[optionKey] = matches.map(match => ({
                 key: match[1], // Captures "Top", "Bottom", "Accessories", etc.
                 clothId: match[2], // Captures the cloth number
