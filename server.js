@@ -690,9 +690,9 @@ app.post('/virtualtryon', async (req, res) => {
             garm_img: bottom,
             category: "Lower-body",
             n_samples: 1,
-            n_steps: 22,
+            n_steps: 30,
             image_scale: 2.2,
-            seed: 5,
+            seed: -1,
         });
 
         const response_1 = await fetch(req.body.top);
@@ -705,9 +705,9 @@ app.post('/virtualtryon', async (req, res) => {
             garm_img: topImage,
             category: "Upper-body",
             n_samples: 1,
-            n_steps: 22,
+            n_steps: 30,
             image_scale: 2.2,
-            seed: 5,
+            seed: -1,
         });
 
         console.log('result:', result.data[0][0].image.url);
