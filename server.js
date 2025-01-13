@@ -63,7 +63,7 @@ const fileFilter = (req, file, cb) => {
     const allowedMimeTypes = [
         'image/jpeg', // JPG, JPEG
         'image/png',  // PNG
-        'image/gif',  // GIF
+        'image/avif',  // GIF
         'image/bmp',  // BMP
         'image/webp', // WEBP
         'image/tiff', // TIFF
