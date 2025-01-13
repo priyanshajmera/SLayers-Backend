@@ -75,7 +75,7 @@ const fileFilter = (req, file, cb) => {
 // Multer middleware
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5 MB
+    limits: { fileSize: 10 * 1024 * 1024 }, // Limit file size to 5 MB
     fileFilter,
 });
 const cleanupFile = (filePath) => {
