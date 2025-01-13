@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Install only production dependencies
-RUN npm install --production
+RUN npm install
 
 # Copy the rest of the backend files into the working directory
 COPY . .
@@ -17,4 +17,4 @@ COPY . .
 EXPOSE 3000
 
 # Start the backend server
-CMD ["node", "server.js"]
+CMD ["npm", "start"]
