@@ -3,7 +3,7 @@ import express from "express";
 import bodyParser from "body-parser";
 import multer from "multer";
 import pkg from 'pg';
-
+import sharp from 'sharp';
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import path from "path";
@@ -42,20 +42,61 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+
 // Multer setup for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const uploadPath = path.join(__dirname, 'uploads');
         if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath);
+            fs.mkdirSync(uploadPath, { recursive: true }); // Create directory recursively if it doesn't exist
         }
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
+        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+        cb(null, `${uniqueSuffix}-${file.originalname}`);
     },
 });
-const upload = multer({ storage });
+
+// File type validation (Allow all common image MIME types including HEIC/HEIF)
+const fileFilter = (req, file, cb) => {
+    const allowedMimeTypes = [
+        'image/jpeg', // JPG, JPEG
+        'image/png',  // PNG
+        'image/gif',  // GIF
+        'image/bmp',  // BMP
+        'image/webp', // WEBP
+        'image/tiff', // TIFF
+        'image/heic', // HEIC (iPhone format)
+        'image/heif', // HEIF (iPhone format)
+    ];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true); // Accept the file
+    } else {
+        cb(new Error('Only image files are allowed!'), false); // Reject the file
+    }
+    
+};
+
+// Multer middleware
+const upload = multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // Limit file size to 10 MB
+    fileFilter,
+});
+
+// Error handling middleware for multer
+const handleMulterError = (err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+        // Handle Multer-specific errors
+        res.status(400).json({ error: `Multer error: ${err.message}` });
+    } else if (err) {
+        // Handle other errors
+        res.status(400).json({ error: err.message });
+    } else {
+        next();
+    }
+};
 
 const cleanupFile = (filePath) => {
     try {
@@ -263,7 +304,7 @@ app.get('/profile', async (req, res) => {
     }
 });
 
-app.put('/profile', upload.single('profileimageurl'), async (req, res) => {
+app.put('/profile', upload.single('profileimageurl'),handleMulterError, async (req, res) => {
     const userId = req.userId; // Get user ID from the request (assuming it's authenticated)
     const { username, email, phone, gender, dob, currentPassword, newPassword } = req.body;
     var profileimageurl=null;
@@ -279,9 +320,15 @@ app.put('/profile', upload.single('profileimageurl'), async (req, res) => {
          // Extracted from middleware after authentication
 
         if (req.file) {
-            const filePath = req.file.path;
-
-            const imageBuffer = fs.readFileSync(filePath);
+            //const filePath = req.file.path;
+            const inputFilePath = req.file.path;
+            const outputFilePath = `${inputFilePath}-converted.jpeg`;
+    
+            // Convert image to JPEG without quality degradation
+            await sharp(inputFilePath)
+                .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
+                .toFile(outputFilePath);
+            const imageBuffer = fs.readFileSync(outputFilePath);
             const base64Image = imageBuffer.toString("base64");
             // Send request to Python API
             const apiResponse = await axios.post(
@@ -362,7 +409,7 @@ app.put('/profile', upload.single('profileimageurl'), async (req, res) => {
 });
 
 // File Upload
-app.post('/upload', upload.single('image'), async (req, res) => {
+app.post('/upload', upload.single('image'),handleMulterError ,async (req, res) => {
     const { category, tags, subcategory } = req.body;
     const userId = req.userId; // Extracted from middleware after authentication
 
@@ -371,9 +418,16 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     }
 
     try {
-        const filePath = req.file.path;
+        //const filePath = req.file.path;
+        const inputFilePath = req.file.path;
+        const outputFilePath = `${inputFilePath}-converted.jpeg`;
 
-        const imageBuffer = fs.readFileSync(filePath);
+        // Convert image to JPEG without quality degradation
+        await sharp(inputFilePath)
+            .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
+            .toFile(outputFilePath);
+
+        const imageBuffer = fs.readFileSync(outputFilePath);
         const base64Image = imageBuffer.toString("base64");
         // Send request to Python API
         const apiResponse = await axios.post(
