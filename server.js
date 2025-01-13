@@ -57,39 +57,31 @@ const storage = multer.diskStorage({
     },
 });
 
-// File type validation
+// File type validation (Allow all common image MIME types including HEIC/HEIF)
 const fileFilter = (req, file, cb) => {
-    const allowedFileTypes = /jpeg|jpg|png|gif/;
-    const extname = allowedFileTypes.test(
-        path.extname(file.originalname).toLowerCase()
-    );
-    const mimetype = allowedFileTypes.test(file.mimetype);
-
-    if (extname && mimetype) {
-        cb(null, true);
+    const allowedMimeTypes = [
+        'image/jpeg', // JPG, JPEG
+        'image/png',  // PNG
+        'image/gif',  // GIF
+        'image/bmp',  // BMP
+        'image/webp', // WEBP
+        'image/tiff', // TIFF
+        'image/heic', // HEIC (iPhone format)
+        'image/heif', // HEIF (iPhone format)
+    ];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true); // Accept the file
     } else {
-        cb(new Error('Only image files are allowed!'), false);
+        cb(new Error('Only image files are allowed!'), false); // Reject the file
     }
 };
 
 // Multer middleware
 const upload = multer({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // Limit file size to 5 MB
+    limits: { fileSize: 10 * 1024 * 1024 }, // Limit file size to 10 MB
     fileFilter,
 });
-// Error handling middleware for multer
-const handleMulterError = (err, req, res, next) => {
-    if (err instanceof multer.MulterError) {
-        // Handle Multer-specific errors
-        res.status(400).json({ error: `Multer error: ${err.message}` });
-    } else if (err) {
-        // Handle other errors
-        res.status(400).json({ error: err.message });
-    } else {
-        next();
-    }
-};
 const cleanupFile = (filePath) => {
     try {
         if (fs.existsSync(filePath)) {
