@@ -279,9 +279,15 @@ app.put('/profile', upload.single('profileimageurl'), async (req, res) => {
          // Extracted from middleware after authentication
 
         if (req.file) {
-            const filePath = req.file.path;
-
-            const imageBuffer = fs.readFileSync(filePath);
+            //const filePath = req.file.path;
+            const inputFilePath = req.file.path;
+            const outputFilePath = `${inputFilePath}-converted.jpeg`;
+    
+            // Convert image to JPEG without quality degradation
+            await sharp(inputFilePath)
+                .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
+                .toFile(outputFilePath);
+            const imageBuffer = fs.readFileSync(outputFilePath);
             const base64Image = imageBuffer.toString("base64");
             // Send request to Python API
             const apiResponse = await axios.post(
