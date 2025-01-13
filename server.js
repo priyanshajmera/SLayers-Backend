@@ -47,16 +47,37 @@ const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const uploadPath = path.join(__dirname, 'uploads');
         if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath);
+            fs.mkdirSync(uploadPath, { recursive: true }); // Create directory recursively if it doesn't exist
         }
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
+        const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+        cb(null, `${uniqueSuffix}-${file.originalname}`);
     },
 });
-const upload = multer({ storage });
 
+// File type validation
+const fileFilter = (req, file, cb) => {
+    const allowedFileTypes = /jpeg|jpg|png|gif/;
+    const extname = allowedFileTypes.test(
+        path.extname(file.originalname).toLowerCase()
+    );
+    const mimetype = allowedFileTypes.test(file.mimetype);
+
+    if (extname && mimetype) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only image files are allowed!'), false);
+    }
+};
+
+// Multer middleware
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5 MB
+    fileFilter,
+});
 const cleanupFile = (filePath) => {
     try {
         if (fs.existsSync(filePath)) {
