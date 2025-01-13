@@ -78,6 +78,18 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }, // Limit file size to 5 MB
     fileFilter,
 });
+// Error handling middleware for multer
+const handleMulterError = (err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+        // Handle Multer-specific errors
+        res.status(400).json({ error: `Multer error: ${err.message}` });
+    } else if (err) {
+        // Handle other errors
+        res.status(400).json({ error: err.message });
+    } else {
+        next();
+    }
+};
 const cleanupFile = (filePath) => {
     try {
         if (fs.existsSync(filePath)) {
@@ -284,7 +296,7 @@ app.get('/profile', async (req, res) => {
     }
 });
 
-app.put('/profile', upload.single('profileimageurl'), async (req, res) => {
+app.put('/profile', upload.single('profileimageurl'),handleMulterError, async (req, res) => {
     const userId = req.userId; // Get user ID from the request (assuming it's authenticated)
     const { username, email, phone, gender, dob, currentPassword, newPassword } = req.body;
     var profileimageurl=null;
@@ -389,7 +401,7 @@ app.put('/profile', upload.single('profileimageurl'), async (req, res) => {
 });
 
 // File Upload
-app.post('/upload', upload.single('image'), async (req, res) => {
+app.post('/upload', upload.single('image'),handleMulterError ,async (req, res) => {
     const { category, tags, subcategory } = req.body;
     const userId = req.userId; // Extracted from middleware after authentication
 
