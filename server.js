@@ -74,7 +74,6 @@ const fileFilter = (req, file, cb) => {
     } else {
         cb(new Error('Only image files are allowed!'), false); // Reject the file
     }
-    
 };
 
 // Multer middleware
