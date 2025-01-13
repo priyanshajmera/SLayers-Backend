@@ -43,17 +43,6 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 
-iPhones typically save images in HEIC (High-Efficiency Image Coding) format, especially for photos taken with the default camera. HEIC images have the MIME type image/heic or image/heif. If you want to handle iPhone-specific formats in your file upload system, you need to account for these MIME types.
-
-Here’s how you can update your multer setup to include iPhone-specific extensions:
-
-Updated Multer Setup for iPhone Extensions
-javascript
-Copy code
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-
 // Multer setup for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
