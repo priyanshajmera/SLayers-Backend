@@ -3,7 +3,7 @@ import express from "express";
 import bodyParser from "body-parser";
 import multer from "multer";
 import pkg from 'pg';
-
+import sharp from 'sharp';
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import path from "path";
@@ -371,9 +371,16 @@ app.post('/upload', upload.single('image'), async (req, res) => {
     }
 
     try {
-        const filePath = req.file.path;
+        //const filePath = req.file.path;
+        const inputFilePath = req.file.path;
+        const outputFilePath = `${inputFilePath}-converted.jpeg`;
 
-        const imageBuffer = fs.readFileSync(filePath);
+        // Convert image to JPEG without quality degradation
+        await sharp(inputFilePath)
+            .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
+            .toFile(outputFilePath);
+
+        const imageBuffer = fs.readFileSync(outputFilePath);
         const base64Image = imageBuffer.toString("base64");
         // Send request to Python API
         const apiResponse = await axios.post(
