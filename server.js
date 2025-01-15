@@ -16,6 +16,8 @@ import { Client } from "@gradio/client";
 import { OpenAI } from "openai";
 import dotenv from "dotenv";
 import { fileURLToPath } from 'url';
+import https from "https";
+
 
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -34,6 +36,11 @@ const DEPLOYMENT_NAME = 'gpt-4';
 // Initialize the app and database connection
 const app = express();
 const port = 3000;
+
+const sslOptions = {
+    key: fs.readFileSync(path.resolve(__dirname, "privkey.pem")),
+    cert: fs.readFileSync(path.resolve(__dirname, "fullchain.pem")),
+};
 
 // Enable CORS for all routes
 app.use(cors());
@@ -427,7 +434,7 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
             .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
             .toFile(outputFilePath);
 
-        
+
 
         const imageBuffer = fs.readFileSync(outputFilePath);
         const base64Image = imageBuffer.toString("base64");
@@ -475,7 +482,7 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
         cleanupFile(outputFilePath);
 
 
-        
+
 
         // Save metadata in the database
         const imageUrl = "https://d26666n82ym1ga.cloudfront.net/" + fileKey; // S3 file URL
@@ -819,9 +826,9 @@ const updateOptionsWithUrls = async (options) => {
     }
 };
 
+const httpsServer = https.createServer(sslOptions, app);
 
 
-// Start server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+httpsServer.listen(port, () => {
+    console.log(`HTTPS server running on https://localhost:${port}`);
 });
