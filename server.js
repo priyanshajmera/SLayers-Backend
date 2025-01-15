@@ -75,7 +75,7 @@ const fileFilter = (req, file, cb) => {
     } else {
         cb(new Error('Only image files are allowed!'), false); // Reject the file
     }
-    
+
 };
 
 // Multer middleware
@@ -304,10 +304,10 @@ app.get('/profile', async (req, res) => {
     }
 });
 
-app.put('/profile', upload.single('profileimageurl'),handleMulterError, async (req, res) => {
+app.put('/profile', upload.single('profileimageurl'), handleMulterError, async (req, res) => {
     const userId = req.userId; // Get user ID from the request (assuming it's authenticated)
     const { username, email, phone, gender, dob, currentPassword, newPassword } = req.body;
-    var profileimageurl=null;
+    var profileimageurl = null;
     try {
         // Check if user exists
         const userCheckQuery = 'SELECT * FROM users WHERE id = $1';
@@ -317,13 +317,13 @@ app.put('/profile', upload.single('profileimageurl'),handleMulterError, async (r
             return res.status(404).json({ message: 'User not found' });
         }
 
-         // Extracted from middleware after authentication
+        // Extracted from middleware after authentication
 
         if (req.file) {
             //const filePath = req.file.path;
             const inputFilePath = req.file.path;
             const outputFilePath = `${inputFilePath}-converted.jpeg`;
-    
+
             // Convert image to JPEG without quality degradation
             await sharp(inputFilePath)
                 .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
@@ -398,7 +398,7 @@ app.put('/profile', upload.single('profileimageurl'),handleMulterError, async (r
         WHERE id = $6
         RETURNING id,username,email,gender,dob,phone,profileimageurl;
       `;
-        const updateResult = await pool.query(updateQuery, [username, email, phone, gender, dob, userId,profileimageurl]);
+        const updateResult = await pool.query(updateQuery, [username, email, phone, gender, dob, userId, profileimageurl]);
 
         // Return the updated user details
         return res.status(200).json({ message: 'Profile updated successfully', user: updateResult.rows[0] });
@@ -409,7 +409,7 @@ app.put('/profile', upload.single('profileimageurl'),handleMulterError, async (r
 });
 
 // File Upload
-app.post('/upload', upload.single('image'),handleMulterError ,async (req, res) => {
+app.post('/upload', upload.single('image'), handleMulterError, async (req, res) => {
     const { category, tags, subcategory } = req.body;
     const userId = req.userId; // Extracted from middleware after authentication
 
@@ -426,6 +426,8 @@ app.post('/upload', upload.single('image'),handleMulterError ,async (req, res) =
         await sharp(inputFilePath)
             .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
             .toFile(outputFilePath);
+
+        
 
         const imageBuffer = fs.readFileSync(outputFilePath);
         const base64Image = imageBuffer.toString("base64");
@@ -469,12 +471,11 @@ app.post('/upload', upload.single('image'),handleMulterError ,async (req, res) =
         }
 
 
-        cleanupFile(req.file.path);
+        cleanupFile(inputFilePath);
+        cleanupFile(outputFilePath);
 
 
-
-        // // Delete the file from the local file system after uploading to S3
-        // fs.unlinkSync(req.file.path);
+        
 
         // Save metadata in the database
         const imageUrl = "https://d26666n82ym1ga.cloudfront.net/" + fileKey; // S3 file URL
@@ -494,6 +495,7 @@ app.post('/upload', upload.single('image'),handleMulterError ,async (req, res) =
         console.error('Error uploading file:', err.message);
         res.status(500).json({ error: 'Failed to upload file', details: err.message });
         cleanupFile(req.file.path);
+        cleanupFile(outputFilePath);
     }
 });
 
@@ -711,20 +713,20 @@ app.post('/ootd', async (req, res) => {
 });
 
 app.post('/virtualtryon', async (req, res) => {
-    const userId=req.userId;
+    const userId = req.userId;
     const userCheckQuery = 'SELECT gender,profileimageurl FROM users WHERE id = $1';
     const userCheckResult = await pool.query(userCheckQuery, [userId]);
-    var defaultImageurl='';
-    if(!userCheckResult.rows[0].profileimageurl){
-        if(userCheckResult.rows[0].gender=='male'){
-            defaultImageurl='https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/ba5ba7978e7302e8ab5eb733cc7221394c4e6faf/model_5.png'
+    var defaultImageurl = '';
+    if (!userCheckResult.rows[0].profileimageurl) {
+        if (userCheckResult.rows[0].gender == 'male') {
+            defaultImageurl = 'https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/ba5ba7978e7302e8ab5eb733cc7221394c4e6faf/model_5.png'
         }
-        else{
-            defaultImageurl=-'https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png'
+        else {
+            defaultImageurl = -'https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png'
         }
     }
-    else{
-        defaultImageurl=userCheckResult.rows[0].profileimageurl;
+    else {
+        defaultImageurl = userCheckResult.rows[0].profileimageurl;
     }
     //now we have to fetch the user image from user id that s3 url will go below
     const response_0 = await fetch(defaultImageurl);
