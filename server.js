@@ -744,7 +744,7 @@ app.post('/virtualtryon', async (req, res) => {
 
         const client = await Client.connect(process.env.GRADIO_API_KEY);
 
-
+        console.log('data bottom',req.body.bottom);
         const response_2 = await fetch(req.body.bottom);
         const bottom = await response_2.blob();
 
@@ -799,7 +799,7 @@ const updateOptionsWithUrls = async (options) => {
 
         // Fetch corresponding records from the database
         const query = `
-            SELECT id, image_url 
+            SELECT id, image_url,category,subcategory,tags 
             FROM outfits 
             WHERE id = ANY($1)
         `;
@@ -807,7 +807,7 @@ const updateOptionsWithUrls = async (options) => {
 
         // Create a mapping of cloth IDs to image URLs
         const clothDatabase = res.rows.reduce((acc, record) => {
-            acc[record.id] = record.image_url;
+            acc[record.id] = record
             return acc;
         }, {});
 
