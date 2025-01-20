@@ -132,6 +132,17 @@ const pool = new Pool({
     port: 5432,
 });
 
+function imageFileToBase64(imagePath) {
+    const imageData = fs.readFileSync(path.resolve(imagePath));
+    return Buffer.from(imageData).toString('base64');
+}
+
+// Use this function to fetch an image from a URL and convert it to base64
+async function imageUrlToBase64(imageUrl) {
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    return Buffer.from(response.data, 'binary').toString('base64');
+}
+
 
 // Create tables
 const dbSetup = async () => {
@@ -719,6 +730,12 @@ app.post('/ootd', async (req, res) => {
     }
 });
 
+function saveBase64AsImage(base64Data, filePath) {
+    const base64Image = base64Data.split(';base64,').pop(); // Remove metadata, if present
+    fs.writeFileSync(filePath, base64Image, { encoding: 'base64' });
+    console.log(`Image saved to ${filePath}`);
+}
+
 app.post('/virtualtryon', async (req, res) => {
     const userId = req.userId;
     const userCheckQuery = 'SELECT gender,profileimageurl FROM users WHERE id = $1';
@@ -738,54 +755,113 @@ app.post('/virtualtryon', async (req, res) => {
     //now we have to fetch the user image from user id that s3 url will go below
     const response_0 = await fetch(defaultImageurl);
     const userImage = await response_0.blob();
+    //old code might need back
+    // try {
+    //     // Connect to the client
+
+    //     const client = await Client.connect(process.env.GRADIO_API_KEY);
+
+    //     console.log('data bottom',req.body.bottom);
+    //     const response_2 = await fetch(req.body.bottom);
+    //     const bottom = await response_2.blob();
+
+    //     const bottomOutput = await client.predict("/process_dc", {
+    //         vton_img: userImage,
+    //         garm_img: bottom,
+    //         category: "Lower-body",
+    //         n_samples: 1,
+    //         n_steps: 30,
+    //         image_scale: 2.2,
+    //         seed: -1,
+    //     });
+
+    //     const response_1 = await fetch(req.body.top);
+    //     const topImage = await response_1.blob();
+    //     const bottomImage = await fetch(bottomOutput.data[0][0].image.url);
+    //     const bottomBlob = await bottomImage.blob();
+    //     // Make the API request and wait for the result
+    //     const result = await client.predict("/process_dc", {
+    //         vton_img: bottomBlob,
+    //         garm_img: topImage,
+    //         category: "Upper-body",
+    //         n_samples: 1,
+    //         n_steps: 30,
+    //         image_scale: 2.2,
+    //         seed: -1,
+    //     });
+
+    //     console.log('result:', result.data[0][0].image.url);
+
+    //     // Return the response
+    //     res.json({
+    //         "top": req.body.top,
+    //         "bottom": req.body.bottom,
+    //         "output": result.data[0][0].image.url
+    //     });
+    // } catch (error) {
+    //     // Handle errors gracefully
+    //     console.error('Error during API call:', error);
+    //     res.status(500).json({ error: 'Failed to process the request' });
+    // }
+
+
+
+    // List of API keys
+    const apiKeys = [
+        "SG_06b81cb55697b898",
+        "SG_5fdfae34f7a9684d"
+    ];
+
+    // Function to get a random API key
+    function getRandomApiKey() {
+        return apiKeys[Math.floor(Math.random() * apiKeys.length)];
+    }
+
+    // Choose an API key (randomly or use the single one if there's only one)
+    const apiKey = apiKeys.length === 1 ? apiKeys[0] : getRandomApiKey();
+    const url = "https://api.segmind.com/v1/try-on-diffusion";
+
+    console.log('apikey:',apiKey);
+    
+    const data = {
+        "model_image": await imageUrlToBase64("https://segmind-sd-models.s3.amazonaws.com/display_images/model.png"),  // Or use imageFileToBase64("IMAGE_PATH")
+        "cloth_image": await imageUrlToBase64(req.body.bottom),  // Or use imageFileToBase64("IMAGE_PATH")
+        "category": "Lower body",
+        "num_inference_steps": 35,
+        "guidance_scale": 2,
+        "seed": Math.floor(Math.random() * 5000000) + 1,
+        "base64":true
+        
+    };
 
     try {
-        // Connect to the client
+        const result = await axios.post(url, data, { headers: { 'x-api-key': apiKey } });
+        
+        console.log('first image generatedd',result.data);
+        const finalData = {
+            "model_image": result.data.image,  // Or use imageFileToBase64("IMAGE_PATH")
+            "cloth_image": await imageUrlToBase64(req.body.top),  // Or use imageFileToBase64("IMAGE_PATH")
+            "category": "Upper body",
+            "num_inference_steps": 35,
+            "guidance_scale": 2,
+            "seed": Math.floor(Math.random() * 5000000) + 1,
+            "base64":true
+            
+        }
 
-        const client = await Client.connect(process.env.GRADIO_API_KEY);
+        const finalResponse = await axios.post(url, finalData, { headers: { 'x-api-key': apiKey } });
+        console.log('final image generatedd');  // The response is the generated image
 
-        console.log('data bottom',req.body.bottom);
-        const response_2 = await fetch(req.body.bottom);
-        const bottom = await response_2.blob();
-
-        const bottomOutput = await client.predict("/process_dc", {
-            vton_img: userImage,
-            garm_img: bottom,
-            category: "Lower-body",
-            n_samples: 1,
-            n_steps: 30,
-            image_scale: 2.2,
-            seed: -1,
-        });
-
-        const response_1 = await fetch(req.body.top);
-        const topImage = await response_1.blob();
-        const bottomImage = await fetch(bottomOutput.data[0][0].image.url);
-        const bottomBlob = await bottomImage.blob();
-        // Make the API request and wait for the result
-        const result = await client.predict("/process_dc", {
-            vton_img: bottomBlob,
-            garm_img: topImage,
-            category: "Upper-body",
-            n_samples: 1,
-            n_steps: 30,
-            image_scale: 2.2,
-            seed: -1,
-        });
-
-        console.log('result:', result.data[0][0].image.url);
-
-        // Return the response
         res.json({
-            "top": req.body.top,
-            "bottom": req.body.bottom,
-            "output": result.data[0][0].image.url
+            "output": finalResponse.data.image
         });
     } catch (error) {
-        // Handle errors gracefully
-        console.error('Error during API call:', error);
+        console.error('Error:', error.response ? error.response.data : error.message);
         res.status(500).json({ error: 'Failed to process the request' });
     }
+
+
+
 
 
 });
