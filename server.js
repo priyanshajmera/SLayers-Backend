@@ -824,7 +824,7 @@ app.post('/virtualtryon', async (req, res) => {
     console.log('apikey:',apiKey);
     
     const data = {
-        "model_image": await imageUrlToBase64("https://segmind-sd-models.s3.amazonaws.com/display_images/model.png"),  // Or use imageFileToBase64("IMAGE_PATH")
+        "model_image": await imageUrlToBase64(defaultImageurl),  // Or use imageFileToBase64("IMAGE_PATH")
         "cloth_image": await imageUrlToBase64(req.body.bottom),  // Or use imageFileToBase64("IMAGE_PATH")
         "category": "Lower body",
         "num_inference_steps": 35,
