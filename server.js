@@ -683,42 +683,36 @@ app.post('/ootd', async (req, res) => {
             }
         );
 
-        // const response = await openai.chat.completions.create({
-        //     model: "gpt-4o-mini",
-        //     messages: [
-        //         {
-        //             role: "system",
-        //             content: "You are a helpful assistant that creates suggestions based on user preferences.",
-        //         },
-        //         {
-        //             role: "user",
-        //             content: promptToSent,
-        //         },
-        //     ],
-        //     max_tokens: 300,
-        //     temperature: 0.7,
-        // });
+
 
         var result = response.data.choices[0].message.content.trim();
         console.log('result:', result);
         const options = {};
-        const sections = result.split(/OUTFIT OPTION \d+:?/gi); // Split by "Outfit Option X"
-        console.log('sections:', sections);
+        const sections = result.split(/OUTFIT OPTION \d+:?/gi); // Split by "OUTFIT OPTION X"
+
         sections.forEach((section, index) => {
             if (index === 0) return; // Skip the intro part
-            const optionKey = `Option ${index} `;
 
-            // Regex to match parts like Top, Bottom, Accessories with Cloth ID
-            const matches = [...section.matchAll(/(\w+):?.*?Item\s(\d+)/gi)];
-            options[optionKey] = matches.map(match => ({
-                key: match[1], // Captures "Top", "Bottom", "Accessories", etc.
-                clothId: match[2], // Captures the cloth number
-            }));
+            const optionKey = `Option ${index}`;
+            options[optionKey] = []; // Initialize array for this option
+
+            // Match lines like "Top: Item 18" or "Accessories: Some suggestion here"
+            const matches = [...section.matchAll(/(\w+):\s*(Item\s(\d+))?(.*?)(?=\n|$)/gi)];
+            console.log('matches',matches);
+            matches.forEach(match => {
+                const key = match[1]; // The part before the colon, e.g., "Top", "Bottom", etc.
+                const clothId = match[3] || null; // Capture Item number if present
+                const suggestion = match[4] ? match[4] : null; // If Item exists, no suggestion
+                console.log('suggestion',suggestion);
+                options[optionKey].push({
+                    key,
+                    clothId,
+                    suggestion,
+                });
+            });
         });
-        console.log('options:', options);
 
-
-
+        console.log('Parsed options:', options);
         var resp = await updateOptionsWithUrls(options)
             .then(updatedOptions => {
                 return updatedOptions;
@@ -726,7 +720,7 @@ app.post('/ootd', async (req, res) => {
             .catch(error => {
                 console.error("Error:", error);
             });
-
+        console.log('converted :', resp);
         res.json(resp);
     } catch (error) {
         console.error("Error with OpenAI API:", error);
@@ -825,8 +819,8 @@ app.post('/virtualtryon', async (req, res) => {
     const apiKey = apiKeys.length === 1 ? apiKeys[0] : getRandomApiKey();
     const url = "https://api.segmind.com/v1/try-on-diffusion";
 
-    console.log('apikey:',apiKey);
     
+
     const data = {
         "model_image": await imageUrlToBase64(defaultImageurl),  // Or use imageFileToBase64("IMAGE_PATH")
         "cloth_image": await imageUrlToBase64(req.body.bottom),  // Or use imageFileToBase64("IMAGE_PATH")
@@ -834,14 +828,14 @@ app.post('/virtualtryon', async (req, res) => {
         "num_inference_steps": 35,
         "guidance_scale": 2,
         "seed": Math.floor(Math.random() * 5000000) + 1,
-        "base64":true
-        
+        "base64": true
+
     };
 
     try {
         const result = await axios.post(url, data, { headers: { 'x-api-key': apiKey } });
-        
-        console.log('first image generatedd',result.data);
+
+       
         const finalData = {
             "model_image": result.data.image,  // Or use imageFileToBase64("IMAGE_PATH")
             "cloth_image": await imageUrlToBase64(req.body.top),  // Or use imageFileToBase64("IMAGE_PATH")
@@ -849,12 +843,12 @@ app.post('/virtualtryon', async (req, res) => {
             "num_inference_steps": 35,
             "guidance_scale": 2,
             "seed": Math.floor(Math.random() * 5000000) + 1,
-            "base64":true
-            
+            "base64": true
+
         }
 
         const finalResponse = await axios.post(url, finalData, { headers: { 'x-api-key': apiKey } });
-        console.log('final image generatedd');  // The response is the generated image
+          
 
         res.json({
             "output": finalResponse.data.image
@@ -863,11 +857,6 @@ app.post('/virtualtryon', async (req, res) => {
         console.error('Error:', error.response ? error.response.data : error.message);
         res.status(500).json({ error: 'Failed to process the request' });
     }
-
-
-
-
-
 });
 
 const updateOptionsWithUrls = async (options) => {
@@ -897,6 +886,49 @@ const updateOptionsWithUrls = async (options) => {
                 ...item,
                 clothId: clothDatabase[item.clothId] || item.clothId // Replace with URL or keep original ID if not found
             }));
+        });
+        // Extract item numbers mentioned in suggestions
+        // Function to extract all "Item X" IDs from suggestions
+        const extractItemIdsFromSuggestions = (options) => {
+            const itemIds = new Set();
+            Object.values(options).forEach(option =>
+                option.forEach(item => {
+                    if (item.key === 'suggestions' && item.suggestion) {
+                        const matches = [...item.suggestion.matchAll(/Item\s(\d+)/g)];
+                        matches.forEach(match => itemIds.add(parseInt(match[1], 10))); // Add matched item IDs
+                    }
+                })
+            );
+            return [...itemIds]; // Return unique item IDs
+        };
+
+        // Extract item IDs from suggestions
+        const itemIds = extractItemIdsFromSuggestions(options);
+
+        // Fetch item data for the extracted item IDs
+        const queryNew = `
+            SELECT id, tags
+            FROM outfits 
+            WHERE id = ANY($1)
+        `;
+        const resp = await pool.query(queryNew, [itemIds]);
+
+        // Create a mapping of item IDs to their tags and details
+        const itemDetails = resp.rows.reduce((acc, record) => {
+            acc[record.id] = record.tags || `Item ${record.id}`; // Use tags if available; otherwise keep "Item X"
+            return acc;
+        }, {});
+
+        // Replace "Item X" in suggestions with the fetched tags
+        Object.keys(options).forEach(optionKey => {
+            options[optionKey].forEach(item => {
+                if (item.key === 'suggestions' && item.suggestion) {
+                    // Replace all occurrences of "Item X" with the corresponding tag or name
+                    item.suggestion = item.suggestion.replace(/Item\s(\d+)/g, (match, itemId) => {
+                        return itemDetails[itemId] || match; // Replace with tag or keep original if not found
+                    });
+                }
+            });
         });
 
         return options;
