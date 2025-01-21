@@ -644,19 +644,23 @@ app.post('/ootd', async (req, res) => {
     var preferences = await generatePreferences(req.body);
     var promptToSent =
         clothData +
-        '\nTask: Based on the provided wardrobe, suggest multiple outfit options for the given preferences:\n'
+        '\nBased on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , suggest multiple outfit options for the given preferences:\n'
         + preferences +
         `\nResponse Format: Provide at least two options in the following format:
         - OUTFIT OPTION 1:
-            - Top: Item number(e.g., Item 17)
-            - Bottom: Item number(e.g., Item 19)
-            - Layered(Only Mentioned in Given preferences):Item number(e.g., Item 21)
-            - Accessories / Footwear: Suggestions for accessories and footwear.
+            - Top: Give only Item number(e.g., Item 17)
+            - Bottom: Give only Item number(e.g., Item 19)
+            - Layering: Give only Item number. Give suggestions if Mentioned yes in Given preferences else ignore dont show in response.
+            - Accessories: Give suggestions if suitable item not available for this category else Give only item number.
+            - Footwear: Give suggestions if suitable item not available for this category else Give only item number.
+            - Styling suggestions: Suggestion to style this outfit option.
         - OUTFIT OPTION 2:
-            - Top: Item number
-            - Bottom: Item number
-            - Layered(Only Mentioned in Given preferences):Item number(e.g., Item 21)
-            - Accessories / Footwear: Suggestions for accessories and footwear.  
+            - Top: Give only Item number
+            - Bottom: Give only Item number
+            - Layering: Give only Item number. Give suggestions if Mentioned yes in Given preferences else ignore dont show in response.
+            - Accessories: Give suggestions if suitable item not available for this category else Give only item number.
+            - Footwear: Give suggestions if suitable item not available for this category else Give only item number.
+            - Styling suggestions: Suggestion to style this outfit option.
         Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique and tailored to the given preferences add layered items in options if mentioned in preferences.`;
     console.log('promptToSent:', promptToSent);
     try {
