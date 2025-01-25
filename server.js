@@ -643,6 +643,10 @@ app.post('/ootd', async (req, res) => {
 
     let userOptions = userOptionsStore.get(userId) || {};
 
+     if (!Array.isArray(userOptions)) {
+        userOptions = [];
+    }
+    
     // Include existing options in the prompt
    const optionsAsText = userOptions
         .map((option, index) => `Option ${index + 1}: ${JSON.stringify(option)}`)
