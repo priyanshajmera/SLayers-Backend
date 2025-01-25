@@ -652,7 +652,7 @@ app.post('/ootd', async (req, res) => {
         .map((option, index) => `Option ${index + 1}: ${JSON.stringify(option)}`)
         .join('\n');
 
-    console.log('optionsAsText', optionsAsText);
+    console.log('userOptions', userOptions);
     
     var clothData = await wardrobeDetails(userId);
     var preferences = await generatePreferences(req.body);
@@ -712,12 +712,10 @@ app.post('/ootd', async (req, res) => {
 
             // Match lines like "Top: Item 18" or "Accessories: Some suggestion here"
             const matches = [...section.matchAll(/(\w+):\s*(Item\s(\d+))?(.*?)(?=\n|$)/gi)];
-            console.log('matches',matches);
             matches.forEach(match => {
                 const key = match[1]; // The part before the colon, e.g., "Top", "Bottom", etc.
                 const clothId = match[3] || null; // Capture Item number if present
                 const suggestion = match[4] ? match[4] : null; // If Item exists, no suggestion
-                console.log('suggestion',suggestion);
                 options[optionKey].push({
                     key,
                     clothId,
@@ -746,7 +744,7 @@ app.post('/ootd', async (req, res) => {
             .catch(error => {
                 console.error("Error:", error);
             });
-        console.log('converted :', resp);
+    
         res.json(resp);
     } catch (error) {
         console.error("Error with OpenAI API:", error);
@@ -757,7 +755,7 @@ app.post('/ootd', async (req, res) => {
 function saveBase64AsImage(base64Data, filePath) {
     const base64Image = base64Data.split(';base64,').pop(); // Remove metadata, if present
     fs.writeFileSync(filePath, base64Image, { encoding: 'base64' });
-    console.log(`Image saved to ${filePath}`);
+    
 }
 
 app.post('/virtualtryon', async (req, res) => {
