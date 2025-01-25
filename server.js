@@ -653,6 +653,11 @@ app.post('/ootd', async (req, res) => {
         .join('\n');
 
     console.log('userOptions', userOptions);
+    // Clear the user's data from the Map after processing
+    console.log('userOptionsStore', userOptionsStore);
+        userOptionsStore.delete(userId);
+    console.log('userOptionsStore', userOptionsStore);
+    console.log('userOptions', userOptions);
     
     var clothData = await wardrobeDetails(userId);
     var preferences = await generatePreferences(req.body);
