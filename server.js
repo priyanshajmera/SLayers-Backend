@@ -654,6 +654,7 @@ app.post('/ootd', async (req, res) => {
 
     // Clear the user's data from the Map after processing
     userOptionsStore.delete(userId);
+    userOptions.shift();
     
     var clothData = await wardrobeDetails(userId);
     var preferences = await generatePreferences(req.body);
@@ -726,6 +727,7 @@ app.post('/ootd', async (req, res) => {
         });
 
         console.log('Parsed options:', options);
+        
         console.log('userOptionsStore:', userOptionsStore);
         console.log('userOptions:', userOptions);
         // Add the new options to the user's queue
