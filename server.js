@@ -652,12 +652,8 @@ app.post('/ootd', async (req, res) => {
         .map((option, index) => `Option ${index + 1}: ${JSON.stringify(option)}`)
         .join('\n');
 
-    console.log('userOptions', userOptions);
     // Clear the user's data from the Map after processing
-    console.log('userOptionsStore', userOptionsStore);
-        userOptionsStore.delete(userId);
-    console.log('userOptionsStore', userOptionsStore);
-    console.log('userOptions', userOptions);
+    userOptionsStore.delete(userId);
     
     var clothData = await wardrobeDetails(userId);
     var preferences = await generatePreferences(req.body);
@@ -734,7 +730,7 @@ app.post('/ootd', async (req, res) => {
         userOptions.push(options);
 
         // If the count exceeds 2, remove the oldest entry
-        if (userOptions.length > 2) {
+        if (userOptions.length > 1) {
             userOptions.shift(); // Remove the oldest entry
         }
 
