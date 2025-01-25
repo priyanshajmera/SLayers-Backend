@@ -640,6 +640,15 @@ app.delete('/outfits/:id', async (req, res) => {
 app.post('/ootd', async (req, res) => {
     const userId = req.userId; // Extracted from middleware after authentication
 
+    let userOptions = userOptionsStore.get(userId) || {};
+
+    // Include existing options in the prompt
+    const optionsAsText = Object.entries(userOptions)
+        .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+        .join('\n');
+
+    console.log('optionsAsText', optionsAsText);
+    
     var clothData = await wardrobeDetails(userId);
     var preferences = await generatePreferences(req.body);
     var promptToSent =
@@ -661,7 +670,7 @@ app.post('/ootd', async (req, res) => {
             - Accessories: Give suggestions if suitable item not available for this category else Give only item number.
             - Footwear: Give suggestions if suitable item not available for this category else Give only item number.
             - Styling suggestions: Suggestion to style this outfit option.
-        Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique and tailored to the given preferences add layered items in options if mentioned in preferences.`;
+        Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique and tailored to the given preferences add layered items in options if mentioned in preferences. Already suggested options from you:\n${optionsAsText} Lets avoid pairing them again`;
     console.log('promptToSent:', promptToSent);
     try {
 
@@ -713,6 +722,10 @@ app.post('/ootd', async (req, res) => {
         });
 
         console.log('Parsed options:', options);
+         // Merge new options with existing ones for the user
+        userOptions = { ...userOptions, ...options };
+        userOptionsStore.set(userId, userOptions);
+        
         var resp = await updateOptionsWithUrls(options)
             .then(updatedOptions => {
                 return updatedOptions;
