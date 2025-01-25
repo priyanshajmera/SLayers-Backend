@@ -216,7 +216,7 @@ const authenticateToken = (req, res, next) => {
 
 const wardrobeDetails = async (userId) => {
 
-    const query = 'SELECT id, image_url, description,category,subcategory FROM outfits WHERE user_id = $1';
+    const query = 'SELECT id, image_url, description,category,subcategory FROM outfits WHERE user_id = $1 ORDER BY RANDOM()';
     const values = [userId];
 
     const result = await pool.query(query, values);
@@ -660,7 +660,7 @@ app.post('/ootd', async (req, res) => {
     var preferences = await generatePreferences(req.body);
     var promptToSent =
         clothData +
-        '\nBased on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , suggest multiple outfit options for the given preferences:\n'
+        '\nBased on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , randomly select clothes and suggest multiple outfit options for the given preferences:\n'
         + preferences +
         `\nResponse Format: Provide at least two options in the following format:
         - OUTFIT OPTION 1:
