@@ -115,6 +115,7 @@ const cleanupFile = (filePath) => {
         console.error(`Error deleting file: ${filePath}`, err.message);
     }
 };
+const userOptionsStore = new Map();
 
 // AWS S3 Setup
 const s3 = new AWS.S3({
