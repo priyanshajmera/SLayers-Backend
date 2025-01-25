@@ -677,7 +677,7 @@ app.post('/ootd', async (req, res) => {
             - Accessories: Give suggestions if suitable item not available for this category else Give only item number.
             - Footwear: Give suggestions if suitable item not available for this category else Give only item number.
             - Styling suggestions: Suggestion to style this outfit option.
-        Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique and tailored to the given preferences add layered items in options if mentioned in preferences. Already suggested options from you:\n${optionsAsText} Lets avoid pairing them again`;
+        Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique also make sure color palette of outfit matches and tailored to the given preferences and add layered items in options if mentioned in preferences. Already suggested options from you:\n${optionsAsText} Lets avoid pairing them again`;
     console.log('promptToSent:', promptToSent);
     try {
 
