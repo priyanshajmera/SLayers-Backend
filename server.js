@@ -644,8 +644,8 @@ app.post('/ootd', async (req, res) => {
     let userOptions = userOptionsStore.get(userId) || {};
 
     // Include existing options in the prompt
-    const optionsAsText = Object.entries(userOptions)
-        .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+   const optionsAsText = userOptions
+        .map((option, index) => `Option ${index + 1}: ${JSON.stringify(option)}`)
         .join('\n');
 
     console.log('optionsAsText', optionsAsText);
@@ -723,9 +723,17 @@ app.post('/ootd', async (req, res) => {
         });
 
         console.log('Parsed options:', options);
-         // Merge new options with existing ones for the user
-        userOptions = { ...userOptions, ...options };
+        // Add the new options to the user's queue
+        userOptions.push(options);
+
+        // If the count exceeds 2, remove the oldest entry
+        if (userOptions.length > 2) {
+            userOptions.shift(); // Remove the oldest entry
+        }
+
+        // Save the updated options back to the Map
         userOptionsStore.set(userId, userOptions);
+
         
         var resp = await updateOptionsWithUrls(options)
             .then(updatedOptions => {
