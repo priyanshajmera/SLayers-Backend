@@ -115,6 +115,7 @@ const cleanupFile = (filePath) => {
         console.error(`Error deleting file: ${filePath}`, err.message);
     }
 };
+const userOptionsStore = new Map();
 
 // AWS S3 Setup
 const s3 = new AWS.S3({
@@ -215,7 +216,7 @@ const authenticateToken = (req, res, next) => {
 
 const wardrobeDetails = async (userId) => {
 
-    const query = 'SELECT id, image_url, description,category,subcategory FROM outfits WHERE user_id = $1';
+    const query = 'SELECT id, image_url, description,category,subcategory FROM outfits WHERE user_id = $1 ORDER BY RANDOM()';
     const values = [userId];
 
     const result = await pool.query(query, values);
@@ -640,11 +641,26 @@ app.delete('/outfits/:id', async (req, res) => {
 app.post('/ootd', async (req, res) => {
     const userId = req.userId; // Extracted from middleware after authentication
 
+    let userOptions = userOptionsStore.get(userId) || {};
+
+     if (!Array.isArray(userOptions)) {
+        userOptions = [];
+    }
+    
+    // Include existing options in the prompt
+   const optionsAsText = userOptions
+        .map((option, index) => `Option ${index + 1}: ${JSON.stringify(option)}`)
+        .join('\n');
+
+    // Clear the user's data from the Map after processing
+    userOptionsStore.delete(userId);
+    userOptions.shift();
+    
     var clothData = await wardrobeDetails(userId);
     var preferences = await generatePreferences(req.body);
     var promptToSent =
         clothData +
-        '\nBased on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , suggest multiple outfit options for the given preferences:\n'
+        '\nBased on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , randomly select clothes and suggest multiple outfit options for the given preferences:\n'
         + preferences +
         `\nResponse Format: Provide at least two options in the following format:
         - OUTFIT OPTION 1:
@@ -661,7 +677,7 @@ app.post('/ootd', async (req, res) => {
             - Accessories: Give suggestions if suitable item not available for this category else Give only item number.
             - Footwear: Give suggestions if suitable item not available for this category else Give only item number.
             - Styling suggestions: Suggestion to style this outfit option.
-        Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique and tailored to the given preferences add layered items in options if mentioned in preferences.`;
+        Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique also make sure color palette of outfit matches and tailored to the given preferences and add layered items in options if mentioned in preferences. Already suggested options from you:\n${optionsAsText} Lets avoid pairing them again`;
     console.log('promptToSent:', promptToSent);
     try {
 
@@ -698,12 +714,10 @@ app.post('/ootd', async (req, res) => {
 
             // Match lines like "Top: Item 18" or "Accessories: Some suggestion here"
             const matches = [...section.matchAll(/(\w+):\s*(Item\s(\d+))?(.*?)(?=\n|$)/gi)];
-            console.log('matches',matches);
             matches.forEach(match => {
                 const key = match[1]; // The part before the colon, e.g., "Top", "Bottom", etc.
                 const clothId = match[3] || null; // Capture Item number if present
                 const suggestion = match[4] ? match[4] : null; // If Item exists, no suggestion
-                console.log('suggestion',suggestion);
                 options[optionKey].push({
                     key,
                     clothId,
@@ -713,6 +727,21 @@ app.post('/ootd', async (req, res) => {
         });
 
         console.log('Parsed options:', options);
+        
+        console.log('userOptionsStore:', userOptionsStore);
+        console.log('userOptions:', userOptions);
+        // Add the new options to the user's queue
+        userOptions.push(options);
+
+        // If the count exceeds 2, remove the oldest entry
+        if (userOptions.length > 1) {
+            userOptions.shift(); // Remove the oldest entry
+        }
+
+        // Save the updated options back to the Map
+        userOptionsStore.set(userId, userOptions);
+
+        
         var resp = await updateOptionsWithUrls(options)
             .then(updatedOptions => {
                 return updatedOptions;
@@ -720,7 +749,7 @@ app.post('/ootd', async (req, res) => {
             .catch(error => {
                 console.error("Error:", error);
             });
-        console.log('converted :', resp);
+    
         res.json(resp);
     } catch (error) {
         console.error("Error with OpenAI API:", error);
@@ -731,7 +760,7 @@ app.post('/ootd', async (req, res) => {
 function saveBase64AsImage(base64Data, filePath) {
     const base64Image = base64Data.split(';base64,').pop(); // Remove metadata, if present
     fs.writeFileSync(filePath, base64Image, { encoding: 'base64' });
-    console.log(`Image saved to ${filePath}`);
+    
 }
 
 app.post('/virtualtryon', async (req, res) => {
