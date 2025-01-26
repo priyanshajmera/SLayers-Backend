@@ -259,6 +259,47 @@ const generatePreferences = async (data) => {
 
 }
 
+const fetchGenderAndDob = async (userId) => {
+
+    const result = await pool.query(
+        'select gender,dob from users where id=$1',
+        [userId]
+    );
+    console.log(`result for user id ${userId}`, result);
+    if (result.rows.length === 0) return null;
+
+    return result.rows[0];
+
+}
+
+const calculateAge = async (dob) => {
+
+    // Convert the input to a Date object
+    const birthDate = new Date(dob);
+    
+    // Extract the year, month, and day from the birth date
+    const birthYear = birthDate.getUTCFullYear();
+    const birthMonth = birthDate.getUTCMonth(); // 0-indexed
+    const birthDay = birthDate.getUTCDate();
+
+    // Get today's date in UTC
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth(); // 0-indexed
+    const todayDay = today.getDate();
+
+    // Calculate the age
+    let age = todayYear - birthYear;
+
+    // Adjust the age if the birthday hasn't occurred yet this year
+    if (todayMonth < birthMonth || (todayMonth === birthMonth && todayDay < birthDay)) {
+        age--;
+    }
+
+    return age;
+
+}
+
 // API Endpoints
 
 // Signup/Register
@@ -643,24 +684,33 @@ app.post('/ootd', async (req, res) => {
 
     let userOptions = userOptionsStore.get(userId) || {};
 
-     if (!Array.isArray(userOptions)) {
+    if (!Array.isArray(userOptions)) {
         userOptions = [];
     }
-    
+
     // Include existing options in the prompt
-   const optionsAsText = userOptions
+    const optionsAsText = userOptions
         .map((option, index) => `Option ${index + 1}: ${JSON.stringify(option)}`)
         .join('\n');
 
     // Clear the user's data from the Map after processing
     userOptionsStore.delete(userId);
     userOptions.shift();
-    
+
     var clothData = await wardrobeDetails(userId);
     var preferences = await generatePreferences(req.body);
+    var userGenderAndDobData = await fetchGenderAndDob(req.userId);
+    var usergender, userDob, userAge;
+    if (userGenderAndDobData) {
+        usergender = userGenderAndDobData.gender;
+        userDob = userGenderAndDobData.dob;
+        userAge = await calculateAge(userDob);
+        
+    }
+
     var promptToSent =
         clothData +
-        '\nBased on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , randomly select clothes and suggest multiple outfit options for the given preferences:\n'
+        `\nTask:Hi i am a ${usergender}, Age ${userAge}. Based on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , randomly select clothes and suggest multiple outfit options for the given preferences:\n`
         + preferences +
         `\nResponse Format: Provide at least two options in the following format:
         - OUTFIT OPTION 1:
@@ -727,7 +777,7 @@ app.post('/ootd', async (req, res) => {
         });
 
         console.log('Parsed options:', options);
-        
+
         console.log('userOptionsStore:', userOptionsStore);
         console.log('userOptions:', userOptions);
         // Add the new options to the user's queue
@@ -741,7 +791,7 @@ app.post('/ootd', async (req, res) => {
         // Save the updated options back to the Map
         userOptionsStore.set(userId, userOptions);
 
-        
+
         var resp = await updateOptionsWithUrls(options)
             .then(updatedOptions => {
                 return updatedOptions;
@@ -749,7 +799,7 @@ app.post('/ootd', async (req, res) => {
             .catch(error => {
                 console.error("Error:", error);
             });
-    
+
         res.json(resp);
     } catch (error) {
         console.error("Error with OpenAI API:", error);
@@ -760,7 +810,7 @@ app.post('/ootd', async (req, res) => {
 function saveBase64AsImage(base64Data, filePath) {
     const base64Image = base64Data.split(';base64,').pop(); // Remove metadata, if present
     fs.writeFileSync(filePath, base64Image, { encoding: 'base64' });
-    
+
 }
 
 app.post('/virtualtryon', async (req, res) => {
@@ -848,7 +898,7 @@ app.post('/virtualtryon', async (req, res) => {
     const apiKey = apiKeys.length === 1 ? apiKeys[0] : getRandomApiKey();
     const url = "https://api.segmind.com/v1/try-on-diffusion";
 
-    
+
 
     const data = {
         "model_image": await imageUrlToBase64(defaultImageurl),  // Or use imageFileToBase64("IMAGE_PATH")
@@ -864,7 +914,7 @@ app.post('/virtualtryon', async (req, res) => {
     try {
         const result = await axios.post(url, data, { headers: { 'x-api-key': apiKey } });
 
-       
+
         const finalData = {
             "model_image": result.data.image,  // Or use imageFileToBase64("IMAGE_PATH")
             "cloth_image": await imageUrlToBase64(req.body.top),  // Or use imageFileToBase64("IMAGE_PATH")
@@ -877,7 +927,7 @@ app.post('/virtualtryon', async (req, res) => {
         }
 
         const finalResponse = await axios.post(url, finalData, { headers: { 'x-api-key': apiKey } });
-          
+
 
         res.json({
             "output": finalResponse.data.image
