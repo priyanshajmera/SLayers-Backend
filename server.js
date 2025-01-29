@@ -660,7 +660,7 @@ app.post('/ootd', async (req, res) => {
     var preferences = await generatePreferences(req.body);
     var promptToSent =
         clothData +
-        '\nBased on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , randomly select clothes and suggest multiple outfit options for the given preferences:\n'
+        '\nBased on the provided wardrobe ,consider categories and sub-categories as description might not tell correct category of cloth, also randomly select clothes and suggest multiple outfit options for the below given preferences also make sure the colour combination of the outfit options is matches even for layring:\n'
         + preferences +
         `\nResponse Format: Provide at least two options in the following format:
         - OUTFIT OPTION 1:
