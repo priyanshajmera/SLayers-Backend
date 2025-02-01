@@ -189,7 +189,7 @@ const dbSetup = async () => {
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'outfits' AND column_name = 'subcategory') THEN
                 ALTER TABLE outfits ADD COLUMN subcategory VARCHAR(100);
             END IF;
-        // END $$;`
+        END $$;`
         // `CREATE TABLE IF NOT EXISTS favorites (
         //     id SERIAL PRIMARY KEY,
         //     user_id int REFERENCES users(id) ON DELETE CASCADE,
