@@ -189,7 +189,14 @@ const dbSetup = async () => {
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'outfits' AND column_name = 'subcategory') THEN
                 ALTER TABLE outfits ADD COLUMN subcategory VARCHAR(100);
             END IF;
-        END $$;`
+        // END $$;`,
+        // `CREATE TABLE IF NOT EXISTS favorites (
+        //     id SERIAL PRIMARY KEY,
+        //     user_id int REFERENCES users(id) ON DELETE CASCADE,
+        //     cloth_url TEXT NOT NULL,
+        //     created_at TIMESTAMP DEFAULT NOW(),
+        //     UNIQUE(user_id, cloth_url) -- Ensures a user can't save the same item twice
+        // );`
     ];
     for (const query of queries) {
         await pool.query(query);
@@ -276,7 +283,7 @@ const calculateAge = async (dob) => {
 
     // Convert the input to a Date object
     const birthDate = new Date(dob);
-    
+
     // Extract the year, month, and day from the birth date
     const birthYear = birthDate.getUTCFullYear();
     const birthMonth = birthDate.getUTCMonth(); // 0-indexed
@@ -407,7 +414,7 @@ app.put('/profile', upload.single('profileimageurl'), handleMulterError, async (
 
             // Define S3 upload parameters
             const params = {
-                Bucket: 'wardrobess', // Your S3 bucket name
+                Bucket: process.env.S3_BUCKET, // Your S3 bucket name
                 Key: fileKey,        // File path in S3
                 Body: processedImageBuffer,  // File content
                 ContentType: req.file.mimetype, // File MIME type
@@ -415,10 +422,8 @@ app.put('/profile', upload.single('profileimageurl'), handleMulterError, async (
 
             // Upload file to S3
             const uploadResult = await s3.upload(params).promise();
-            profileimageurl = `https://d26666n82ym1ga.cloudfront.net/${fileKey}`
+            profileimageurl = `${process.env.CLOUD_FRONT}/${fileKey}`
         }
-
-
 
 
         const user = userCheckResult.rows[0];
@@ -508,7 +513,7 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
 
         // Define S3 upload parameters
         const params = {
-            Bucket: 'wardrobess', // Your S3 bucket name
+            Bucket: process.env.S3_BUCKET, // Your S3 bucket name
             Key: fileKey,        // File path in S3
             Body: processedImageBuffer,  // File content
             ContentType: req.file.mimetype, // File MIME type
@@ -520,7 +525,7 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
         // Call Flask API to process the image
         try {
             const flaskResponse = await axios.post(`${process.env.API_URL}/process-image`, {
-                image_url: `https://d26666n82ym1ga.cloudfront.net/${fileKey}`,
+                image_url: `${process.env.CLOUD_FRONT}/${fileKey}`,
             });
 
             description = flaskResponse.data.caption;
@@ -538,7 +543,7 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
 
 
         // Save metadata in the database
-        const imageUrl = "https://d26666n82ym1ga.cloudfront.net/" + fileKey; // S3 file URL
+        const imageUrl = process.env.CLOUD_FRONT + fileKey; // S3 file URL
 
         const result = await pool.query(
             'INSERT INTO outfits (user_id, image_url, category,subcategory ,tags,description) VALUES ($1, $2, $3, $4,$5,$6) RETURNING id',
@@ -661,11 +666,11 @@ app.delete('/outfits/:id', async (req, res) => {
         const imageUrl = outfitResult.rows[0].image_url;
 
         // Extract the file key from the image URL
-        const fileKey = imageUrl.replace('https://d26666n82ym1ga.cloudfront.net/', '');
+        const fileKey = imageUrl.replace(process.env.CLOUD_FRONT, '');
 
         // Delete the file from S3
         await s3.deleteObject({
-            Bucket: 'wardrobess',
+            Bucket: process.env.S3_BUCKET,
             Key: fileKey,
         }).promise();
 
@@ -705,7 +710,7 @@ app.post('/ootd', async (req, res) => {
         usergender = userGenderAndDobData.gender;
         userDob = userGenderAndDobData.dob;
         userAge = await calculateAge(userDob);
-        
+
     }
 
     var promptToSent =
@@ -807,11 +812,42 @@ app.post('/ootd', async (req, res) => {
     }
 });
 
-function saveBase64AsImage(base64Data, filePath) {
-    const base64Image = base64Data.split(';base64,').pop(); // Remove metadata, if present
-    fs.writeFileSync(filePath, base64Image, { encoding: 'base64' });
+app.post('/AddTofavorites', async (req, res) => {
+    try {
+        const { cloth_url } = req.body;
+        const user_id = req.userId;
 
-}
+        const result = await pool.query(
+            "INSERT INTO favorites (user_id, cloth_url) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *",
+            [user_id, cloth_url]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(409).json({ message: "Item already in favorites" });
+        }
+
+        res.status(201).json({ message: "Item added to favorites" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+app.get*('/favorites',async(req,res)=>{
+    try {
+        const user_id = req.userId;
+
+        const result = await pool.query(
+            "SELECT id, cloth_url FROM favorites WHERE user_id = $1",
+            [user_id]
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error" });
+    }
+})
 
 app.post('/virtualtryon', async (req, res) => {
     const userId = req.userId;
@@ -938,6 +974,27 @@ app.post('/virtualtryon', async (req, res) => {
     }
 });
 
+app.delete('/removeFavorites',async(req,res)=>{
+    try {
+        const { cloth_url } = req.body;
+        const user_id = req.userId;
+
+        const result = await pool.query(
+            "DELETE FROM favorites WHERE user_id = $1 AND cloth_url = $2 RETURNING *",
+            [user_id, cloth_url]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Item not found in favorites" });
+        }
+
+        res.json({ message: "Item removed from favorites" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Server error" });
+    }
+})
+
 const updateOptionsWithUrls = async (options) => {
     try {
         // Extract all cloth IDs from the options object
@@ -1016,6 +1073,12 @@ const updateOptionsWithUrls = async (options) => {
         throw error;
     }
 };
+
+function saveBase64AsImage(base64Data, filePath) {
+    const base64Image = base64Data.split(';base64,').pop(); // Remove metadata, if present
+    fs.writeFileSync(filePath, base64Image, { encoding: 'base64' });
+
+}
 
 const httpsServer = https.createServer(sslOptions, app);
 
