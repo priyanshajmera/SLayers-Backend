@@ -11,12 +11,13 @@ import cors from "cors";
 import fs from "fs";
 import AWS from "aws-sdk";
 import axios from "axios";
-import { spawn } from "child_process";
-import { Client } from "@gradio/client";
 import { OpenAI } from "openai";
 import dotenv from "dotenv";
 import { fileURLToPath } from 'url';
 import https from "https";
+import { exec } from "child_process";
+
+
 
 
 dotenv.config();
@@ -473,6 +474,23 @@ app.put('/profile', upload.single('profileimageurl'), handleMulterError, async (
     }
 });
 
+async function removeBackgroundWithRembg(inputPath, outputPath) {
+    return new Promise((resolve, reject) => {
+        const command = `rembg i ${inputPath} ${outputPath}`;
+        exec(command, (error, stdout, stderr) => {
+            if (error) {
+                console.error("Error removing background:", error.message);
+                return reject(error);
+            }
+            if (stderr) {
+                console.error("rembg stderr:", stderr);
+            }
+            console.log("Background removed successfully:", outputPath);
+            resolve(outputPath);
+        });
+    });
+}
+
 // File Upload
 app.post('/upload', upload.single('image'), handleMulterError, async (req, res) => {
     const { category, tags, subcategory } = req.body;
@@ -485,65 +503,74 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
     try {
         //const filePath = req.file.path;
         const inputFilePath = req.file.path;
-        const outputFilePath = `${inputFilePath}-converted.jpeg`;
+        const convertedFilePath = `${inputFilePath}-converted.jpeg`;
+        const outputFilePath = `${inputFilePath}-bg-removed.png`; // Final output
 
         // Convert image to JPEG without quality degradation
         await sharp(inputFilePath)
             .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
-            .toFile(outputFilePath);
+            .toFile(convertedFilePath);
 
 
 
-        const imageBuffer = fs.readFileSync(outputFilePath);
-        const base64Image = imageBuffer.toString("base64");
-        // Send request to Python API
-        const apiResponse = await axios.post(
-            `${process.env.API_URL}/remove-background/`,
-            { image_base64: base64Image },
+        await removeBackgroundWithRembg(convertedFilePath, outputFilePath);
 
-        );
-        // Handle the API response and send base64 image back to the client
-        const processedImageBase64 = apiResponse.data.image_base64;
-        const processedImageBuffer = Buffer.from(processedImageBase64, "base64");
+        // ✅ Read the processed image
+        const outputBuffer = fs.readFileSync(outputFilePath);
 
 
         const fileKey = `User_${userId}/${Date.now()}`;
-
-
 
         // Define S3 upload parameters
         const params = {
             Bucket: process.env.S3_BUCKET, // Your S3 bucket name
             Key: fileKey,        // File path in S3
-            Body: processedImageBuffer,  // File content
-            ContentType: req.file.mimetype, // File MIME type
+            Body: outputBuffer,  // File content
+            ContentType: "image/png", // File MIME type
         };
 
         // Upload file to S3
         const uploadResult = await s3.upload(params).promise();
         var description = '';
-        // Call Flask API to process the image
+        // Call Open Ai for description
         try {
-            const flaskResponse = await axios.post(`${process.env.API_URL}/process-image`, {
-                image_url: `${process.env.CLOUD_FRONT}/${fileKey}`,
+            const response = await openai.chat.completions.create({
+                model: "gpt-4o-mini", // Use the correct model for image processing
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            { type: "text", text: "Describe the clothing in the image with precise details for a stylist. Include the color, style, pattern, fabric, fit, and any standout design elements. The description should be vivid yet concise (maximum 3 lines) so that a reader can clearly visualize the garment without seeing the image." },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: `${process.env.CLOUD_FRONT}/${fileKey}`,
+                                    detail: "low",
+                                },
+                            },
+                        ],
+                    },
+                ],
+                store: true,
             });
-
-            description = flaskResponse.data.caption;
+            console.log('response from api', response);
+            description = response.choices[0]?.message?.content
+        } catch (error) {
+            console.error('Open AI API failed:', error.message);
+            description = 'Description unavailable';
         }
-        catch (flaskError) {
-            console.error('Flask API failed:', flaskError.message);
-            description = 'Description unavailable'; // Default value in case of failure
-        }
 
 
-        cleanupFile(inputFilePath);
-        cleanupFile(outputFilePath);
+
+        inputFilePath && cleanupFile(inputFilePath);
+        outputFilePath && cleanupFile(outputFilePath);
+        convertedFilePath && cleanupFile(convertedFilePath);
 
 
 
 
         // Save metadata in the database
-        const imageUrl = process.env.CLOUD_FRONT + fileKey; // S3 file URL
+        const imageUrl = process.env.CLOUD_FRONT + '/' + fileKey; // S3 file URL
 
         const result = await pool.query(
             'INSERT INTO outfits (user_id, image_url, category,subcategory ,tags,description) VALUES ($1, $2, $3, $4,$5,$6) RETURNING id',
@@ -560,7 +587,7 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
         console.error('Error uploading file:', err.message);
         res.status(500).json({ error: 'Failed to upload file', details: err.message });
         cleanupFile(req.file.path);
-        cleanupFile(outputFilePath);
+
     }
 });
 
@@ -833,7 +860,7 @@ app.post('/AddTofavorites', async (req, res) => {
     }
 });
 
-app.get*('/favorites',async(req,res)=>{
+app.get * ('/favorites', async (req, res) => {
     try {
         const user_id = req.userId;
 
@@ -974,7 +1001,7 @@ app.post('/virtualtryon', async (req, res) => {
     }
 });
 
-app.delete('/removeFavorites',async(req,res)=>{
+app.delete('/removeFavorites', async (req, res) => {
     try {
         const { cloth_url } = req.body;
         const user_id = req.userId;
