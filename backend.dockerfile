@@ -23,7 +23,7 @@ COPY package.json package-lock.json ./
 
 # Install Node.js dependencies
 RUN npm install
-
+RUN npm audit fix --force
 # Copy the rest of the backend files
 COPY . .
 
