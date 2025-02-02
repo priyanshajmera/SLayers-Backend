@@ -1,26 +1,19 @@
-# Use a Node.js image with Python support
-FROM node:20.10.0-bullseye
-
-# Install Python and pip
-RUN apt-get update && apt-get install -y python3 python3-pip
+# Use a smaller base image
+FROM node:20.10.0-alpine
 
 # Set working directory inside the container
 WORKDIR /app
 
-# Copy only package.json and package-lock.json to install dependencies
+# Copy package files first for efficient caching
 COPY package.json package-lock.json ./
 
 # Install only production dependencies
-RUN npm install
-RUN npm audit fix --force
+RUN npm ci --only=production
 
-# Install rembg
-RUN pip3 install rembg onnxruntime asyncer click filetype aiohttp gradio
-
-# Copy the rest of the backend files into the working directory
+# Copy the rest of the application files
 COPY . .
 
-# Expose the port the backend will run on
+# Expose the application port
 EXPOSE 3000
 
 # Start the backend server
