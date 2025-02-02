@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 
 # Install only production dependencies
 RUN npm install
+RUN pip install rembg
 
 # Copy the rest of the backend files into the working directory
 COPY . .
