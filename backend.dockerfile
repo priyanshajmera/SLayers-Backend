@@ -1,19 +1,11 @@
-# First stage: Install dependencies
-FROM node:20.10.0-bullseye AS build
+# Use lightweight Alpine image with Node.js
+FROM node:20-alpine AS build
 
-# Install Python and pip
-RUN apt-get update && apt-get install -y python3 python3-pip
+# Install Python and pip (Alpine uses apk for package management)
+RUN apk add --no-cache python3 py3-pip
 
 # Install rembg
 RUN pip3 install rembg
-
-# Second stage: Use a clean Node.js image for runtime
-FROM node:20.10.0-bullseye
-
-# Copy Python and rembg from the first stage
-COPY --from=build /usr/local/lib/python3.*/ /usr/local/lib/python3.*/
-COPY --from=build /usr/bin/python3 /usr/bin/python3
-COPY --from=build /usr/bin/pip3 /usr/bin/pip3
 
 # Set working directory
 WORKDIR /app
@@ -22,12 +14,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Install Node.js dependencies
-RUN npm install
+RUN npm install --only=production
 
 # Copy the rest of the backend files
 COPY . .
 
-# Expose the port the backend will run on
+# Expose the port
 EXPOSE 3000
 
 # Start the backend server
