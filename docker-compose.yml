@@ -11,6 +11,8 @@ services:
     restart: unless-stopped  # Automatically restart the container unless explicitly stopped
     networks:
       - app-network
+    depends_on:
+      - rembg-service  # Ensure FastAPI rembg service starts first
 
   frontend:
     image: frontend-app:11
@@ -21,6 +23,15 @@ services:
     depends_on:
       - backend
     restart: unless-stopped  # Automatically restart the container unless explicitly stopped
+    networks:
+      - app-network
+
+  rembg-service:
+    image: rembg-app:11
+    container_name: rembg-service
+    ports:
+      - "5000:5000"  # Exposes FastAPI rembg service
+    restart: unless-stopped
     networks:
       - app-network
 
