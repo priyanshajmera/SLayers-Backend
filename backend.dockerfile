@@ -15,7 +15,7 @@ RUN npm install
 RUN npm audit fix --force
 
 # Install rembg
-RUN pip3 install rembg
+RUN pip3 install rembg onnxruntime asyncer click filetype aiohttp gradio
 
 # Copy the rest of the backend files into the working directory
 COPY . .
