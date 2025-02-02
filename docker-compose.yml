@@ -7,33 +7,50 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env  # Include the .env file
-    restart: unless-stopped  # Automatically restart the container unless explicitly stopped
+      - .env
+    restart: unless-stopped
     networks:
       - app-network
     depends_on:
-      - rembg-service  # Ensure FastAPI rembg service starts first
+      - rembg-service
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"  # Restrict backend to 0.5 CPU
+          memory: "512M"  # Limit backend to 512MB RAM
 
   frontend:
     image: frontend-app:11
     container_name: frontend-app
     ports:
-      - "80:80"  # HTTP traffic
-      - "443:443"  # HTTPS traffic
+      - "80:80"
+      - "443:443"
     depends_on:
       - backend
-    restart: unless-stopped  # Automatically restart the container unless explicitly stopped
-    networks:
-      - app-network
-
-  rembg-service:
-    image: rembg-app:11
-    container_name: rembg-service
-    ports:
-      - "5000:5000"  # Exposes FastAPI rembg service
     restart: unless-stopped
     networks:
       - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"  # Restrict frontend to 0.3 CPU
+          memory: "256M"  # Limit frontend to 256MB RAM
+
+  rembg-service:
+    image: rembg-app:latest  # Use your pre-built rembg image
+    container_name: rembg-service
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.2"  # Allocate most CPU to rembg
+          memory: "2.5G"  # Give rembg more RAM for processing
+    environment:
+      - WORKERS=2  # Run rembg with 2 workers (optimized for 2 CPUs)
 
 networks:
   app-network:
