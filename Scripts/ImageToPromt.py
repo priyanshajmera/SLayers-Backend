@@ -1,55 +1,68 @@
-import subprocess
-import torch
+import os
+import base64
+import rembg
+import warnings
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from PIL import Image
-from transformers import AutoProcessor, AutoModelForCausalLM
+from io import BytesIO
 
+# 🔹 Prevent torch from using GPU (if installed)
+os.environ["U2NET_ENABLE_CUDA"] = "0"
 
+# 🔹 Suppress `timm` warnings (optional)
+warnings.filterwarnings("ignore", category=FutureWarning, module="timm.models.layers")
 
+# 🔹 Initialize FastAPI app
+app = FastAPI()
 
+class Base64Image(BaseModel):
+    image_base64: str
 
-def generate_caption(image):
-    if not isinstance(image, Image.Image):
-        image = Image.fromarray(image)
+def remove_background(image: Image.Image, resize: tuple = (512, 512)):
+    """Removes background and resizes image efficiently."""
     
-    inputs = florence_processor(text=caption, images=image, return_tensors="pt").to(device)
-    generated_ids = florence_model.generate(
-        input_ids=inputs["input_ids"],
-        pixel_values=inputs["pixel_values"],
-        max_new_tokens=50,
-        early_stopping=False,
-        do_sample=False,
-        num_beams=3,
-    )
-    generated_text = florence_processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
-    parsed_answer = florence_processor.post_process_generation(
-        generated_text,
-        task=caption,
-        image_size=(image.width, image.height)
-    )
-    prompt =  parsed_answer[caption]
-    
-    return prompt
+    if image.mode not in ["RGB", "RGBA"]:
+        image = image.convert("RGBA")  # Handle transparency
 
-# Example usage
-if __name__ == "__main__":
-    import sys
-    # Initialize Florence model
-    import warnings
-    warnings.filterwarnings("ignore", category=FutureWarning, module="timm.models.layers")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    caption="Describe clothing and ignore the background."
-    
-    florence_model = AutoModelForCausalLM.from_pretrained('microsoft/Florence-2-base', trust_remote_code=True).to(device)
-    florence_processor = AutoProcessor.from_pretrained('microsoft/Florence-2-base', trust_remote_code=True)
-    if len(sys.argv) < 2:
-        print("Usage: python script.py <image_path>")
-        sys.exit(1)
-    
-    image_path = sys.argv[1]
-    
+    # Convert to bytes
+    input_bytes = BytesIO()
+    image.save(input_bytes, format="PNG")  # PNG ensures transparency support
+    input_bytes = input_bytes.getvalue()
+
+    # Process with rembg
+    output_bytes = rembg.remove(input_bytes)
+    result = Image.open(BytesIO(output_bytes))
+
+    # Resize efficiently with LANCZOS
+    result = result.resize(resize, Image.LANCZOS)
+
+    return result
+
+@app.post("/remove-background/")
+@app.post("/remove-background")
+async def remove_background_base64(data: Base64Image, width: int = 512, height: int = 512):
+    """Removes background and resizes to given dimensions (default: 512x512)."""
     try:
-        input_image = Image.open(image_path)
-        output_prompt = generate_caption(input_image)
-        print(f"{output_prompt}")
+        image_data = base64.b64decode(data.image_base64)
+        image = Image.open(BytesIO(image_data))
+
+        # Process image
+        processed_image = remove_background(image, resize=(width, height))
+
+        # Convert output to base64
+        output_bytes = BytesIO()
+        processed_image.save(output_bytes, format="PNG")
+        output_bytes.seek(0)
+        processed_image_base64 = base64.b64encode(output_bytes.read()).decode("utf-8")
+
+        return {
+            "message": "Background removed successfully",
+            "image_base64": processed_image_base64,
+        }
     except Exception as e:
-        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000, workers=4)
