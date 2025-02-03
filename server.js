@@ -474,23 +474,6 @@ app.put('/profile', upload.single('profileimageurl'), handleMulterError, async (
     }
 });
 
-async function removeBackgroundWithRembg(inputPath, outputPath) {
-    return new Promise((resolve, reject) => {
-        const command = `rembg i ${inputPath} ${outputPath}`;
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.error("Error removing background:", error.message);
-                return reject(error);
-            }
-            if (stderr) {
-                console.error("rembg stderr:", stderr);
-            }
-            console.log("Background removed successfully:", outputPath);
-            resolve(outputPath);
-        });
-    });
-}
-
 // File Upload
 app.post('/upload', upload.single('image'), handleMulterError, async (req, res) => {
     const { category, tags, subcategory } = req.body;
@@ -503,29 +486,32 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
     try {
         //const filePath = req.file.path;
         const inputFilePath = req.file.path;
-        const convertedFilePath = `${inputFilePath}-converted.jpeg`;
-        const outputFilePath = `${inputFilePath}-bg-removed.png`; // Final output
+        const outputFilePath = `${inputFilePath}-converted.jpeg`;
 
         // Convert image to JPEG without quality degradation
         await sharp(inputFilePath)
             .jpeg({ quality: 100, chromaSubsampling: '4:4:4' }) // Maximum quality and no chroma subsampling
-            .toFile(convertedFilePath);
+            .toFile(outputFilePath);
 
+        const imageBuffer = fs.readFileSync(outputFilePath);
+        const base64Image = imageBuffer.toString("base64");
+        // Send request to Python API
+        const apiResponse = await axios.post(
+            `${process.env.API_URL}/remove-background/`,
+            { image_base64: base64Image },
 
-
-        await removeBackgroundWithRembg(convertedFilePath, outputFilePath);
-
-        // ✅ Read the processed image
-        const outputBuffer = fs.readFileSync(outputFilePath);
-
+        );
+        // Handle the API response and send base64 image back to the client
+        const processedImageBase64 = apiResponse.data.image_base64;
+        const processedImageBuffer = Buffer.from(processedImageBase64, "base64");
 
         const fileKey = `User_${userId}/${Date.now()}`;
 
         // Define S3 upload parameters
         const params = {
             Bucket: process.env.S3_BUCKET, // Your S3 bucket name
-            Key: fileKey,        // File path in S3
-            Body: outputBuffer,  // File content
+            Key: fileKey,
+            Body: processedImageBuffer,  // File content
             ContentType: "image/png", // File MIME type
         };
 
@@ -560,13 +546,8 @@ app.post('/upload', upload.single('image'), handleMulterError, async (req, res) 
             description = 'Description unavailable';
         }
 
-
-
         inputFilePath && cleanupFile(inputFilePath);
         outputFilePath && cleanupFile(outputFilePath);
-        convertedFilePath && cleanupFile(convertedFilePath);
-
-
 
 
         // Save metadata in the database
