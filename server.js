@@ -190,14 +190,19 @@ const dbSetup = async () => {
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'outfits' AND column_name = 'subcategory') THEN
                 ALTER TABLE outfits ADD COLUMN subcategory VARCHAR(100);
             END IF;
-        END $$;`
-        // `CREATE TABLE IF NOT EXISTS favorites (
-        //     id SERIAL PRIMARY KEY,
-        //     user_id int REFERENCES users(id) ON DELETE CASCADE,
-        //     cloth_url TEXT NOT NULL,
-        //     created_at TIMESTAMP DEFAULT NOW(),
-        //     UNIQUE(user_id, cloth_url) -- Ensures a user can't save the same item twice
-        // );`
+        END $$;`,
+        `CREATE TABLE IF NOT EXISTS favorites (
+            id SERIAL PRIMARY KEY,
+            name varchar(255),
+            user_id int REFERENCES users(id) ON DELETE CASCADE,
+            try_on_url TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            top_id int REFERENCES outfits(id),
+            bottom_id int REFERENCES outfits(id),
+             suggestion TEXT,
+             UNIQUE(user_id, top_id,bottom_id) -- Ensures a user can't save the same item twice
+            
+         );`
     ];
     for (const query of queries) {
         await pool.query(query);
@@ -820,37 +825,105 @@ app.post('/ootd', async (req, res) => {
     }
 });
 
-app.post('/AddTofavorites', async (req, res) => {
+app.post('/AddToFavorites', async (req, res) => {
     try {
-        const { cloth_url } = req.body;
-        const user_id = req.userId;
+        const { top, bottom, vtonimage, suggestion,name } = req.body;
+        const userId = req.userId;
+        //upload vtonimage to s3 and extract the url and save to db
+        const base64Data = Buffer.from(vtonimage, "base64");
+        
 
+        const fileKey = `User_${userId}/${Date.now()}`;
+
+        // Define S3 upload parameters
+        const params = {
+            Bucket: process.env.S3_BUCKET, // Your S3 bucket name
+            Key: fileKey,
+            Body: base64Data,  // File content
+            ContentType: `image/jpeg`, // File MIME type
+        };
+
+        // Upload file to S3
+        const uploadResult = await s3.upload(params).promise();
+        const try_on_url = `${process.env.CLOUD_FRONT}/${fileKey}`
+
+        // Insert into database
         const result = await pool.query(
-            "INSERT INTO favorites (user_id, cloth_url) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *",
-            [user_id, cloth_url]
+            `INSERT INTO favorites (user_id, top_id, bottom_id, try_on_url, suggestion,name)
+             VALUES ($1, $2, $3, $4, $5,$6) 
+             ON CONFLICT (user_id, top_id, bottom_id) DO NOTHING 
+             RETURNING *`,
+            [userId, top, bottom, try_on_url, suggestion,name]
         );
 
         if (result.rowCount === 0) {
             return res.status(409).json({ message: "Item already in favorites" });
         }
 
-        res.status(201).json({ message: "Item added to favorites" });
+        res.status(201).json({ message: "Item added to favorites", try_on_url });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Server error" });
     }
 });
 
-app.get * ('/favorites', async (req, res) => {
+app.get('/favorites', async (req, res) => {
     try {
         const user_id = req.userId;
-
         const result = await pool.query(
-            "SELECT id, cloth_url FROM favorites WHERE user_id = $1",
+            `SELECT 
+                f.id AS favorite_id,
+                f.user_id,
+                f.try_on_url,
+                f.created_at,
+                f.suggestion,
+                f.name,
+                top_outfit.id AS top_id,
+                top_outfit.image_url AS top_image_url,
+                top_outfit.category AS top_category,
+                top_outfit.description AS top_description,
+                top_outfit.tags AS top_tags,
+                top_outfit.subcategory AS top_subcategory,
+
+                bottom_outfit.id AS bottom_id,
+                bottom_outfit.image_url AS bottom_image_url,
+                bottom_outfit.category AS bottom_category,
+                bottom_outfit.description AS bottom_description,
+                bottom_outfit.tags AS bottom_tags,
+                bottom_outfit.subcategory AS bottom_subcategory
+
+            FROM favorites f
+            LEFT JOIN outfits top_outfit ON f.top_id = top_outfit.id
+            LEFT JOIN outfits bottom_outfit ON f.bottom_id = bottom_outfit.id
+            WHERE f.user_id = $1`,
             [user_id]
         );
+        const formattedData = result.rows.map(row => ({
+            favorite_id: row.favorite_id,
+            user_id: row.user_id,
+            try_on_url: row.try_on_url,
+            created_at: row.created_at,
+            suggestion: row.suggestion,
+            name:row.name,
+            top: {
+                id: row.top_id,
+                image_url: row.top_image_url,
+                category: row.top_category,
+                description: row.top_description,
+                tags: row.top_tags,
+                subcategory: row.top_subcategory
+            },
+            bottom: {
+                id: row.bottom_id,
+                image_url: row.bottom_image_url,
+                category: row.bottom_category,
+                description: row.bottom_description,
+                tags: row.bottom_tags,
+                subcategory: row.bottom_subcategory
+            }
+        }));
+        res.json(formattedData);
 
-        res.json(result.rows);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Server error" });
@@ -873,59 +946,9 @@ app.post('/virtualtryon', async (req, res) => {
     else {
         defaultImageurl = userCheckResult.rows[0].profileimageurl;
     }
-    //now we have to fetch the user image from user id that s3 url will go below
+
     const response_0 = await fetch(defaultImageurl);
     const userImage = await response_0.blob();
-    //old code might need back
-    // try {
-    //     // Connect to the client
-
-    //     const client = await Client.connect(process.env.GRADIO_API_KEY);
-
-    //     console.log('data bottom',req.body.bottom);
-    //     const response_2 = await fetch(req.body.bottom);
-    //     const bottom = await response_2.blob();
-
-    //     const bottomOutput = await client.predict("/process_dc", {
-    //         vton_img: userImage,
-    //         garm_img: bottom,
-    //         category: "Lower-body",
-    //         n_samples: 1,
-    //         n_steps: 30,
-    //         image_scale: 2.2,
-    //         seed: -1,
-    //     });
-
-    //     const response_1 = await fetch(req.body.top);
-    //     const topImage = await response_1.blob();
-    //     const bottomImage = await fetch(bottomOutput.data[0][0].image.url);
-    //     const bottomBlob = await bottomImage.blob();
-    //     // Make the API request and wait for the result
-    //     const result = await client.predict("/process_dc", {
-    //         vton_img: bottomBlob,
-    //         garm_img: topImage,
-    //         category: "Upper-body",
-    //         n_samples: 1,
-    //         n_steps: 30,
-    //         image_scale: 2.2,
-    //         seed: -1,
-    //     });
-
-    //     console.log('result:', result.data[0][0].image.url);
-
-    //     // Return the response
-    //     res.json({
-    //         "top": req.body.top,
-    //         "bottom": req.body.bottom,
-    //         "output": result.data[0][0].image.url
-    //     });
-    // } catch (error) {
-    //     // Handle errors gracefully
-    //     console.error('Error during API call:', error);
-    //     res.status(500).json({ error: 'Failed to process the request' });
-    // }
-
-
 
     // List of API keys
     const apiKeys = [
@@ -982,14 +1005,15 @@ app.post('/virtualtryon', async (req, res) => {
     }
 });
 
-app.delete('/removeFavorites', async (req, res) => {
+app.delete('/removeFavorites/:id', async (req, res) => {
     try {
-        const { cloth_url } = req.body;
+        
         const user_id = req.userId;
+        const fav_id=req.params.id
 
         const result = await pool.query(
-            "DELETE FROM favorites WHERE user_id = $1 AND cloth_url = $2 RETURNING *",
-            [user_id, cloth_url]
+            "DELETE FROM favorites WHERE user_id = $1 AND favorites.id = $2 RETURNING *",
+            [user_id, fav_id]
         );
 
         if (result.rowCount === 0) {
