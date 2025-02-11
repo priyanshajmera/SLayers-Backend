@@ -730,7 +730,7 @@ app.post('/ootd', async (req, res) => {
         clothData +
         `\nTask:Hi i am a ${usergender}, Age ${userAge}. Based on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , randomly select clothes and suggest multiple outfit options for the given preferences:\n`
         + preferences +
-        `\nResponse Format: Provide at least two options in the following format:
+        `\nResponse Format: Provide at least two options. Strictly follow the below following format:
         - OUTFIT OPTION 1:
             - Top: Give only Item number(e.g., Item 17)
             - Bottom: Give only Item number(e.g., Item 19)
@@ -797,7 +797,7 @@ app.post('/ootd', async (req, res) => {
             options[optionKey] = []; // Initialize array for this option
 
             // Match lines like "Top: Item 18" or "Accessories: Some suggestion here"
-            const matches = [...section.matchAll(/(\w+):\s*(?:Item\s(\d+))?\s*(.*)/gi)];
+            const matches = [...section.matchAll(/(\w+):\s*(Item\s(\d+))?(.*?)(?=\n|$)/gi)];
             matches.forEach(match => {
                 const key = match[1]; // The part before the colon, e.g., "Top", "Bottom", etc.
                 const clothId = match[3] || null; // Capture Item number if present
