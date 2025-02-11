@@ -749,27 +749,43 @@ app.post('/ootd', async (req, res) => {
     console.log('promptToSent:', promptToSent);
     try {
 
-        const response = await axios.post(
-            `${AZURE_OPENAI_ENDPOINT}openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=2024-08-01-preview`,
-            {
-                messages: [
-                    { role: 'system', content: 'You are a friendly fashion expert specializing in generating outfit suggestions based on provided clothing descriptions.' },
-                    { role: 'user', content: promptToSent }
-                ],
-                max_tokens: 300,
-                temperature: 0.7
-            },
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'api-key': AZURE_OPENAI_API_KEY
-                }
-            }
-        );
+        // const response = await axios.post(
+        //     `${AZURE_OPENAI_ENDPOINT}openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=2024-08-01-preview`,
+        //     {
+        //         messages: [
+        //             { role: 'system', content: 'You are a friendly fashion expert specializing in generating outfit suggestions based on provided clothing descriptions.' },
+        //             { role: 'user', content: promptToSent }
+        //         ],
+        //         max_tokens: 300,
+        //         temperature: 0.7
+        //     },
+        //     {
+        //         headers: {
+        //             'Content-Type': 'application/json',
+        //             'api-key': AZURE_OPENAI_API_KEY
+        //         }
+        //     }
+        // );
+
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a friendly fashion expert specializing in generating outfit suggestions based on provided clothing descriptions.",
+                },
+                {
+                    role: "user",
+                    content: promptToSent,
+                },
+            ],
+            max_tokens: 300,
+            temperature: 0.7,
+        });
 
 
-
-        var result = response.data.choices[0].message.content.trim();
+        
+        var result = response.choices[0].message.content.trim();
         console.log('result:', result);
         const options = {};
         const sections = result.split(/OUTFIT OPTION \d+:?/gi); // Split by "OUTFIT OPTION X"
