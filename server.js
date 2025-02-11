@@ -797,7 +797,7 @@ app.post('/ootd', async (req, res) => {
             options[optionKey] = []; // Initialize array for this option
 
             // Match lines like "Top: Item 18" or "Accessories: Some suggestion here"
-            const matches = [...section.matchAll(/(\w+):\s*(Item\s(\d+))?(.*?)(?=\n|$)/gi)];
+            const matches = [...section.matchAll(/(\w+):\s*(?:Item\s(\d+))?\s*(.*)/gi)];
             matches.forEach(match => {
                 const key = match[1]; // The part before the colon, e.g., "Top", "Bottom", etc.
                 const clothId = match[3] || null; // Capture Item number if present
