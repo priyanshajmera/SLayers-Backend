@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "@imgly/background-removal": "^1.5.8",
     "@imgly/background-removal-node": "^1.4.5",
     "aws-sdk": "^2.1692.0",

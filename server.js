@@ -16,6 +16,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from 'url';
 import https from "https";
 import { exec } from "child_process";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 
 
@@ -32,6 +33,10 @@ const openai = new OpenAI({
 const AZURE_OPENAI_ENDPOINT = 'https://pulki-m5mhzt4t-australiaeast.cognitiveservices.azure.com/';
 const AZURE_OPENAI_API_KEY = process.env.AZURE_OPEN_AI;
 const DEPLOYMENT_NAME = 'gpt-4';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-pro-exp-02-05" });
 
 
 // Initialize the app and database connection
@@ -767,25 +772,41 @@ app.post('/ootd', async (req, res) => {
         //     }
         // );
 
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
+        // const response = await openai.chat.completions.create({
+        //     model: "gpt-4o-mini",
+        //     messages: [
+        //         {
+        //             role: "system",
+        //             content: "You are a friendly fashion expert specializing in generating outfit suggestions based on provided clothing descriptions.",
+        //         },
+        //         {
+        //             role: "user",
+        //             content: promptToSent,
+        //         },
+        //     ],
+        //     max_tokens: 300,
+        //     temperature: 0.7,
+        // });
+
+        const geminiResp = await geminiModel.generateContent({
+            contents: [
                 {
-                    role: "system",
-                    content: "You are a friendly fashion expert specializing in generating outfit suggestions based on provided clothing descriptions.",
-                },
-                {
-                    role: "user",
-                    content: promptToSent,
-                },
+                  role: 'user',
+                  parts: [
+                    {
+                      text: promptToSent,
+                    }
+                  ],
+                }
             ],
-            max_tokens: 300,
-            temperature: 0.7,
+            generationConfig: {
+              maxOutputTokens: 300,
+              temperature: 0.7,
+            }
         });
 
-
-        
-        var result = response.choices[0].message.content.trim();
+        // var result = response.choices[0].message.content.trim();
+        var result=geminiResp.response.text().trim();
         console.log('result:', result);
         const options = {};
         const sections = result.split(/OUTFIT OPTION \d+:?/gi); // Split by "OUTFIT OPTION X"
