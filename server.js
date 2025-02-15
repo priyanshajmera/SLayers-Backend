@@ -469,7 +469,7 @@ app.put('/profile', upload.single('profileimageurl'), handleMulterError, async (
           phone = COALESCE($3, phone),
           gender = COALESCE($4, gender),
           dob = COALESCE($5, dob),
-          profileimageurl=COALESCE($7, profileimageurl)
+          profileimageurl=$7
 
         WHERE id = $6
         RETURNING id,username,email,gender,dob,phone,profileimageurl;
