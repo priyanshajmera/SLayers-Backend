@@ -739,32 +739,32 @@ app.post('/ootd', async (req, res) => {
     Preferences to consider:\n` + preferences +
     `\nResponse Format: Provide at least two stylish and well-coordinated outfit options. Strictly follow the format below:
     
-    - **OUTFIT OPTION 1:**
-        - **Top:** Item number (e.g., Item 17)
-        - **Bottom:** Item number (e.g., Item 19)
-        - **Layering (if applicable):** Item number. If layering is mentioned in preferences, include a stylish layering option; otherwise, ignore this section.
-        - **Accessories:** If suitable accessories are available, provide item numbers; otherwise, suggest trendy alternatives that complement the outfit.
-        - **Footwear:** If a matching footwear item exists, provide the item number; otherwise, suggest an appropriate alternative based on fashion trends.
-        - **Styling suggestions:** Provide expert styling advice on how to wear the outfit, including color coordination, fit adjustments, accessorizing tips, and any additional fashion insights to enhance the overall look.
+    - OUTFIT OPTION 1:
+        - Top: Item number (e.g., Item 17)
+        - Bottom: Item number (e.g., Item 19)
+        - Layering (if applicable): Item number. If layering is mentioned in preferences, include a stylish layering option; otherwise, ignore this section.
+        - Accessories: If suitable accessories are available, provide item numbers; otherwise, suggest trendy alternatives that complement the outfit.
+        - Footwear: If a matching footwear item exists, provide the item number; otherwise, suggest an appropriate alternative based on fashion trends.
+        - Styling suggestions: Provide expert styling advice on how to wear the outfit, including color coordination, fit adjustments, accessorizing tips, and any additional fashion insights to enhance the overall look.
 
-    - **OUTFIT OPTION 2:**
-        - **Top:** Item number
-        - **Bottom:** Item number
-        - **Layering (if applicable):** Item number. If layering is mentioned in preferences, include a stylish layering option; otherwise, ignore this section.
-        - **Accessories:** If suitable accessories are available, provide item numbers; otherwise, suggest trendy alternatives that complement the outfit.
-        - **Footwear:** If a matching footwear item exists, provide the item number; otherwise, suggest an appropriate alternative based on fashion trends.
-        - **Styling suggestions:** Provide expert styling advice on how to wear the outfit, including color coordination, fit adjustments, accessorizing tips, and any additional fashion insights to enhance the overall look.
+    - OUTFIT OPTION 2:
+        - Top: Item number
+        - Bottom: Item number
+        - Layering (if applicable): Item number. If layering is mentioned in preferences, include a stylish layering option; otherwise, ignore this section.
+        - Accessories: If suitable accessories are available, provide item numbers; otherwise, suggest trendy alternatives that complement the outfit.
+        - Footwear: If a matching footwear item exists, provide the item number; otherwise, suggest an appropriate alternative based on fashion trends.
+        - Styling suggestions: Provide expert styling advice on how to wear the outfit, including color coordination, fit adjustments, accessorizing tips, and any additional fashion insights to enhance the overall look.
 
-    **Important Considerations:**
+    Important Considerations:
     - Each outfit should be unique, avoiding repetition of previously suggested options.
     - Ensure that the color palette is well-coordinated and aligned with the user’s preferences.
     - Incorporate layering only if specified in the preferences.
     - Maintain a balance between casual, formal, and seasonal trends based on the user's needs.
     - Pay attention to fabric textures and how they complement each other in an outfit.
 
-    **Already suggested outfit combinations:**\n${optionsAsText} 
+    Already suggested outfit combinations:\n${optionsAsText} 
     Avoid repeating these combinations. Aim for fresh, trendy, and fashion-forward suggestions.`;
-    console.log('promptToSent:', promptToSent);
+console.log('promptToSent:', promptToSent);
 
     try {
 
