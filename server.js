@@ -36,7 +36,7 @@ const DEPLOYMENT_NAME = 'gpt-4';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-pro-exp-02-05" });
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 
 // Initialize the app and database connection
@@ -732,26 +732,40 @@ app.post('/ootd', async (req, res) => {
     }
 
     var promptToSent =
-        clothData +
-        `\nTask:Hi i am a ${usergender}, Age ${userAge}. Based on the provided wardrobe consider categories and sub-categories as description might not tell correct category of cloth , randomly select clothes and suggest multiple outfit options for the given preferences:\n`
-        + preferences +
-        `\nResponse Format: Provide at least two options. Strictly follow the below following format:
-        - OUTFIT OPTION 1:
-            - Top: Give only Item number(e.g., Item 17)
-            - Bottom: Give only Item number(e.g., Item 19)
-            - Layering: Give only Item number. Give suggestions if Mentioned yes in Given preferences else ignore dont show in response.
-            - Accessories: Give suggestions if suitable item not available for this category else Give only item number.
-            - Footwear: Give suggestions if suitable item not available for this category else Give only item number.
-            - Styling suggestions: Suggestion to style this outfit option.
-        - OUTFIT OPTION 2:
-            - Top: Give only Item number
-            - Bottom: Give only Item number
-            - Layering: Give only Item number. Give suggestions if Mentioned yes in Given preferences else ignore dont show in response.
-            - Accessories: Give suggestions if suitable item not available for this category else Give only item number.
-            - Footwear: Give suggestions if suitable item not available for this category else Give only item number.
-            - Styling suggestions: Suggestion to style this outfit option.
-        Ensure all components reference the corresponding Item numbers where applicable.Each outfit should be unique also make sure color palette of outfit matches and tailored to the given preferences and add layered items in options if mentioned in preferences. Already suggested options from you:\n${optionsAsText} Lets avoid pairing them again`;
+    clothData +
+    `\nTask: Hi, I am a ${usergender}, Age ${userAge}. Based on the provided wardrobe, intelligently categorize the clothing items and ensure that selections align with the latest fashion trends, seasonal suitability, and a cohesive color palette. 
+    Carefully curate multiple outfit options that are stylish, well-balanced, and tailored to my given preferences. Consider category and sub-category carefully, as descriptions may not always accurately represent the correct classification of each item. Ensure that outfits reflect modern styling techniques, layering methods (if applicable), and appropriate accessory pairings.
+    
+    Preferences to consider:\n` + preferences +
+    `\nResponse Format: Provide at least two stylish and well-coordinated outfit options. Strictly follow the format below:
+    
+    - **OUTFIT OPTION 1:**
+        - **Top:** Item number (e.g., Item 17)
+        - **Bottom:** Item number (e.g., Item 19)
+        - **Layering (if applicable):** Item number. If layering is mentioned in preferences, include a stylish layering option; otherwise, ignore this section.
+        - **Accessories:** If suitable accessories are available, provide item numbers; otherwise, suggest trendy alternatives that complement the outfit.
+        - **Footwear:** If a matching footwear item exists, provide the item number; otherwise, suggest an appropriate alternative based on fashion trends.
+        - **Styling suggestions:** Provide expert styling advice on how to wear the outfit, including color coordination, fit adjustments, accessorizing tips, and any additional fashion insights to enhance the overall look.
+
+    - **OUTFIT OPTION 2:**
+        - **Top:** Item number
+        - **Bottom:** Item number
+        - **Layering (if applicable):** Item number. If layering is mentioned in preferences, include a stylish layering option; otherwise, ignore this section.
+        - **Accessories:** If suitable accessories are available, provide item numbers; otherwise, suggest trendy alternatives that complement the outfit.
+        - **Footwear:** If a matching footwear item exists, provide the item number; otherwise, suggest an appropriate alternative based on fashion trends.
+        - **Styling suggestions:** Provide expert styling advice on how to wear the outfit, including color coordination, fit adjustments, accessorizing tips, and any additional fashion insights to enhance the overall look.
+
+    **Important Considerations:**
+    - Each outfit should be unique, avoiding repetition of previously suggested options.
+    - Ensure that the color palette is well-coordinated and aligned with the user’s preferences.
+    - Incorporate layering only if specified in the preferences.
+    - Maintain a balance between casual, formal, and seasonal trends based on the user's needs.
+    - Pay attention to fabric textures and how they complement each other in an outfit.
+
+    **Already suggested outfit combinations:**\n${optionsAsText} 
+    Avoid repeating these combinations. Aim for fresh, trendy, and fashion-forward suggestions.`;
     console.log('promptToSent:', promptToSent);
+
     try {
 
         // const response = await axios.post(
