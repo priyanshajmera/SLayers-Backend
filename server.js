@@ -814,7 +814,7 @@ console.log('promptToSent:', promptToSent);
                 }
             ],
             generationConfig: {
-              maxOutputTokens: 300,
+              maxOutputTokens: 690,
               temperature: 0.7,
             }
         });
