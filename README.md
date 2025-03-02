@@ -83,13 +83,13 @@ src/
 
 ### Authentication
 
-- POST `/auth/signup` - Register new user
-- POST `/auth/signin` - User login
+- POST `/signup` - Register new user
+- POST `/signin` - User login
 
 ### User Profile
 
-- GET `/user/profile` - Get user profile
-- PUT `/user/profile` - Update user profile
+- GET `/profile` - Get user profile
+- PUT `/profile` - Update user profile
 
 ### Wardrobe
 
@@ -98,7 +98,7 @@ src/
 - GET `/outfits/:id` - Get single outfit
 - PUT `/outfits/:id` - Update outfit
 - DELETE `/outfits/:id` - Delete outfit
-- POST `/outfits/ootd` - Get outfit suggestions
+- POST `/ootd` - Get outfit suggestions
 
 ### Favorites
 
