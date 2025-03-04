@@ -1,6 +1,6 @@
 import express from 'express';
 import pool from '../config/database.js';
-import { calculateAge } from '../utils/helpers.js';
+import { calculateAge, wardrobeDetails, generatePreferences, fetchGenderAndDob } from '../utils/helpers.js';
 import { geminiModel } from '../config/ai.js';
 
 const router = express.Router();
@@ -25,22 +25,15 @@ router.post('/', async (req, res) => {
             [userId]
         );
 
-        let wardrobePrompt = 'Wardrobe Details:\n';
-        wardrobeQuery.rows.forEach(row => {
-            wardrobePrompt += `Item ${row.id}\n`;
-            wardrobePrompt += `Category ${row.category}\n`;
-            wardrobePrompt += `Sub-category ${row.subcategory}\n`;
-            wardrobePrompt += `   Description: ${row.description}\n\n`;
-        });
-
-        // Get user details
-        const userQuery = await pool.query('SELECT gender, dob FROM users WHERE id = $1', [userId]);
-        const user = userQuery.rows[0];
-        const userAge = calculateAge(user.dob);
-
-        // Generate preferences string
-        const preferences = req.body.map(item => `${item.category}: ${item.tag}`).join(', ');
-
+        var clothData = await wardrobeDetails(userId);
+        var preferences = await generatePreferences(req.body);
+        var userGenderAndDobData = await fetchGenderAndDob(req.userId);
+        var usergender, userDob, userAge;
+        if (userGenderAndDobData) {
+            usergender = userGenderAndDobData.gender;
+            userDob = userGenderAndDobData.dob;
+            userAge = await calculateAge(userDob);
+        }
         var promptToSent =
             clothData +
                     `\nTask: Hi, I am a ${usergender}, Age ${userAge}. Based on the provided wardrobe, intelligently categorize the clothing items and ensure that selections align with the latest fashion trends, seasonal suitability, and a cohesive color palette. 

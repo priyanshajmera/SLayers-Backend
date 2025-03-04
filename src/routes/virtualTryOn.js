@@ -23,13 +23,13 @@ router.post('/', async (req, res) => {
         const user = userResult.rows[0];
 
         let defaultImageUrl;
-        if (!user.profileimageurl) {
-            defaultImageUrl = user.gender === 'male'
-                ? 'https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/ba5ba7978e7302e8ab5eb733cc7221394c4e6faf/model_5.png'
-                : 'https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png';
-        } else {
-            defaultImageUrl = user.profileimageurl;
-        }
+        
+        defaultImageUrl = user.gender === 'male'
+            ? 'https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/ba5ba7978e7302e8ab5eb733cc7221394c4e6faf/model_5.png'
+            : 'https://levihsu-ootdiffusion.hf.space/file=/tmp/gradio/2e0cca23e744c036b3905c4b6167371632942e1c/model_1.png';
+    
+        
+        
 
         // Choose an API key
         const apiKey = apiKeys.length === 1 ? apiKeys[0] : getRandomApiKey();
