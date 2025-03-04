@@ -31,13 +31,13 @@ router.post('/upload', upload.single('image'), handleMulterError, async (req, re
         const imageBuffer = fs.readFileSync(outputFilePath);
         const base64Image = imageBuffer.toString("base64");
 
-        const apiResponse = await axios.post(
-            `${process.env.API_URL}/remove-background/`,
-            { image_base64: base64Image }
-        );
+        // const apiResponse = await axios.post(
+        //     `${process.env.API_URL}/remove-background/`,
+        //     { image_base64: base64Image }
+        // );
 
-        const processedImageBase64 = apiResponse.data.image_base64;
-        const processedImageBuffer = Buffer.from(processedImageBase64, "base64");
+        // const processedImageBase64 = apiResponse.data.image_base64;
+        const processedImageBuffer = Buffer.from(base64Image, "base64");
         const fileKey = `User_${userId}/${Date.now()}`;
 
         const params = {

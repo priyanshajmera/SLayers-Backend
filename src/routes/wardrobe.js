@@ -7,6 +7,7 @@ const router = express.Router();
 // Get wardrobe items
 router.get('/', async (req, res) => {
     const userId = req.userId;
+    console.log('User ID:', userId); // Log the userId
     try {
         const result = await pool.query(
             `SELECT * 
