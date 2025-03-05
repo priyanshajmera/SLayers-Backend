@@ -1,6 +1,6 @@
 import express from 'express';
 import { upload, handleMulterError, cleanupFile } from '../config/multer.js';
-import openai from 'openai';
+import { openai, geminiModel } from '../config/ai.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -18,7 +18,7 @@ router.post('/outfitrating', upload.single('image'), handleMulterError, async (r
     try {
         const prompt = "You are a friendly fashion expert who reviews outfits in a simple, human, and engaging way: Generate the following:\n" +
             "1. A ** Title ** (max 5 words) that captures the style and feel of the outfit (e.g., 'Relaxed Weekend Chic').\n" +
-            "2. A ** Star Rating ** (1–5) that reflects the overall appeal of the outfit.\n" +
+            "2. A ** Rating ** (1–5) that reflects the overall appeal of the outfit.\n" +
             "3. A ** Review ** (3–5 sentences) written in simple and relatable words. It should:\n" +
             "- Highlight the best features of the outfit.\n" +
             "- Suggest specific clothing items or accessories (like a scarf, watch, shoes, or bag) that would make the outfit even more stylish.\n" +
@@ -47,23 +47,24 @@ router.post('/outfitrating', upload.single('image'), handleMulterError, async (r
                 store: true,
             });
             description = response.choices[0]?.message?.content;
-            const regex = /Title:\s*"(.*?)"\s*Star Rating:\s*(\d\.\d)\s*Review:\s*(.*)/;
+            console.log('description', description);
+            const regex = /### Title:\s(.*?)\n\n### Rating:\s([\d.]+)\/5\n\n### Review:\n([\s\S]*)/;
             const match = description.match(regex);
             const title = match[1];
             const starRating = match[2];
             const review = match[3]; // Extract title, star rating, and review using regex
-            description = `${title}\n${starRating}\n${review}`;     
-            res.status(200).json({ rating: rating, title: title, starRating: starRating, review: review });
+            description = `${title}\n${starRating}\n${review}`;
+            res.status(200).json({ rating: starRating, title: title, review: review });
         } catch (error) {
             console.error('OpenAI API failed:', error.message);
             description = 'Description unavailable';
         }
-        res.status(200).json({ rating: description });
+
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error getting rating' });
     } finally {
-
+        cleanupFile(req.file.path);
     }
 });
 
