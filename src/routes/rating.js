@@ -58,7 +58,7 @@ router.post('/outfitrating', upload.single('image'), handleMulterError, async (r
             });
             description = response.choices[0]?.message?.content;
             console.log('description', description);
-            const regex = /### Title:\s(.*?)\n\n### Rating:\s([\d.]+)\/5\n\n### Review:\n([\s\S]*)/;
+            const regex = /\*\*Title\*\*:\s*(.*?)\n\*\*Rating\*\*:\s*(\d+)\n\*\*Review\*\*:\s*([\s\S]*)/;
             const match = description.match(regex);
             const title = match[1];
             const starRating = match[2];
