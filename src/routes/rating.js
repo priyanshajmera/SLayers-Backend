@@ -16,14 +16,24 @@ router.post('/outfitrating', upload.single('image'), handleMulterError, async (r
     const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
     console.log(fileUrl);
     try {
-        const prompt = "You are a friendly fashion expert who reviews outfits in a simple, human, and engaging way: Generate the following:\n" +
-            "1. A ** Title ** (max 5 words) that captures the style and feel of the outfit (e.g., 'Relaxed Weekend Chic').\n" +
-            "2. A ** Rating ** (1–5) that reflects the overall appeal of the outfit.\n" +
-            "3. A ** Review ** (3–5 sentences) written in simple and relatable words. It should:\n" +
-            "- Highlight the best features of the outfit.\n" +
-            "- Suggest specific clothing items or accessories (like a scarf, watch, shoes, or bag) that would make the outfit even more stylish.\n" +
-            "- End with a friendly and motivating comment, encouraging the person to feel confident about their style.\n" +
-            "The tone should feel like advice from a kind and fashionable friend. Avoid overly complex words or jargon, and make the review easy to read and fun!";
+        const prompt = `You are a friendly fashion expert who reviews outfits in a simple, engaging way. Even if given minimal information (such as just "jeans" or "top"), create a complete outfit concept around that item and provide a full review.
+                        Respond STRICTLY in this format:
+                        **Title**: [5 words maximum that capture the style essence]
+                        **Rating**: [Number from 1-5]
+                        **Review**: [3-5 sentences that:
+                        1. Highlight what works about the outfit or the mentioned item
+                        2. Suggest specific complementary pieces or accessories to enhance the look
+                        3. End with an encouraging comment about confidence and style]
+                        EXAMPLES:
+                        For complete outfit: "Black jeans with white t-shirt and leather jacket"
+                        **Title**: Timeless Rock-Casual Blend
+                        **Rating**: 4
+                        **Review**: This classic combination balances edgy and casual perfectly. The contrast between the black jeans and white tee creates a clean foundation, while the leather jacket adds character. Try adding ankle boots and a simple necklace to elevate this look further. You've got great instincts for putting together pieces that never go out of style!
+                        For partial outfit: "Blue jeans"
+                        **Title**: Versatile Denim Foundation
+                        **Rating**: 3
+                        **Review**: Blue jeans are the perfect canvas for countless stylish looks. These would pair beautifully with a crisp white button-down for a classic feel, or a colorful sweater for a more casual vibe. Adding some white sneakers and a simple belt would complete this versatile foundation perfectly. With your denim as a starting point, you're set up for outfit success!
+                        IMPORTANT: Always provide all three sections (Title, Rating, Review) exactly as formatted above, even with minimal information.`;
 
         let description = '';
         try {
