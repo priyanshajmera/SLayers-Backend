@@ -11,6 +11,7 @@ router.post('/outfitrating', upload.single('image'), handleMulterError, async (r
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
+    
 
     // Generate the file URL
     const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
